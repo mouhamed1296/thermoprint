@@ -72,6 +72,8 @@ pub mod encoding;
 pub mod error;
 /// Shared domain types (alignment, print width, tax entries).
 pub mod types;
+/// Internationalisation — receipt label translations.
+pub mod i18n;
 
 /// Image rasterisation (native builds only).
 #[cfg(feature = "native")]
@@ -80,6 +82,7 @@ pub mod image;
 // Convenient top-level re-exports
 pub use builder::ReceiptBuilder;
 pub use error::ThermoprintError;
+pub use i18n::{Language, ReceiptLabels};
 pub use types::{Align, PrintWidth, TaxEntry};
 
 // ── WASM public surface ───────────────────────────────────────────────────────

@@ -2,17 +2,31 @@
 ///
 /// Builds a full 80mm receipt and writes the raw ESC/POS bytes to `receipt.bin`.
 ///
-/// Run:
+/// Run (default French):
 ///   cargo run --example native --features native
+///
+/// Run with a specific language:
+///   cargo run --example native --features native -- en
+///   cargo run --example native --features native -- wo
 ///
 /// Send to a real printer (Linux/macOS):
 ///   cat receipt.bin > /dev/usb/lp0
 use std::fs;
-use thermoprint::{ReceiptBuilder, PrintWidth, TaxEntry};
+use thermoprint::{ReceiptBuilder, PrintWidth, TaxEntry, Language};
 use rust_decimal::prelude::*;
 
 fn main() {
+    let lang = match std::env::args().nth(1).as_deref() {
+        Some("en") => Language::En,
+        Some("es") => Language::Es,
+        Some("pt") => Language::Pt,
+        Some("ar") => Language::Ar,
+        Some("wo") => Language::Wo,
+        _          => Language::Fr,
+    };
+
     let bytes = ReceiptBuilder::new(PrintWidth::Mm80)
+        .language(lang)
         // ── Header ────────────────────────────────────────────────────────
         .init()
         .shop_header("MA BOUTIQUE", "+221 77 000 00 00", "Dakar, Sénégal")

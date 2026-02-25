@@ -58,6 +58,11 @@ publish:
 publish-npm: build-wasm
 	cd pkg && npm publish --access public
 
+## Serve the web demo (build WASM first, then open browser)
+serve-demo: build-wasm
+	@echo "🌐 Open http://localhost:8000/examples/web/"
+	python3 -m http.server 8000
+
 ## Clean build artifacts
 clean:
 	cargo clean

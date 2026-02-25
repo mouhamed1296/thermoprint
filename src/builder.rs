@@ -4,6 +4,7 @@ use rust_decimal::prelude::Zero;
 use crate::commands::{self, LF};
 use crate::encoding::{encode_cp858, truncate, two_col, center, right_align};
 use crate::error::ThermoprintError;
+use crate::i18n::{Language, ReceiptLabels, LABELS_FR};
 use crate::types::{Align, PrintWidth, TaxEntry};
 
 // ── Money formatting ──────────────────────────────────────────────────────────
@@ -38,6 +39,7 @@ pub struct ReceiptBuilder {
     data:     Vec<u8>,
     width:    PrintWidth,
     currency: String,
+    labels:   ReceiptLabels,
 }
 
 impl ReceiptBuilder {
@@ -48,6 +50,7 @@ impl ReceiptBuilder {
             data:     Vec::new(),
             width,
             currency: "FCFA".to_owned(),
+            labels:   LABELS_FR,
         }
     }
 
@@ -59,6 +62,26 @@ impl ReceiptBuilder {
     /// ```
     pub fn currency(mut self, symbol: impl Into<String>) -> Self {
         self.currency = symbol.into();
+        self
+    }
+
+    /// Set the receipt language for all high-level labels.
+    ///
+    /// Defaults to [`Language::Fr`] (French). Available languages:
+    /// `Fr`, `En`, `Es`, `Pt`, `Ar`, `Wo`.
+    ///
+    /// ```rust
+    /// use thermoprint::{ReceiptBuilder, PrintWidth, Language};
+    /// let b = ReceiptBuilder::new(PrintWidth::Mm80).language(Language::En);
+    /// ```
+    pub fn language(mut self, lang: Language) -> Self {
+        self.labels = lang.labels();
+        self
+    }
+
+    /// Set custom receipt labels directly for full control.
+    pub fn labels(mut self, labels: ReceiptLabels) -> Self {
+        self.labels = labels;
         self
     }
 
@@ -369,7 +392,7 @@ impl ReceiptBuilder {
                 self.push_text_line(&orig_line);
 
                 // Discount
-                let disc_line = format!("  Remise: -{}", self.fmt(disc));
+                let disc_line = format!("  {} -{}", self.labels.item_discount, self.fmt(disc));
                 self.push_text_line(&disc_line);
 
                 // Final price (bold, right-aligned)
@@ -394,11 +417,11 @@ impl ReceiptBuilder {
     /// Print the subtotal HT (excluding tax) line.
     pub fn subtotal_ht(mut self, amount: Decimal) -> Self {
         let cols = self.cols();
-        let label = "SOUS-TOTAL HT";
+        let label = self.labels.subtotal_ht;
         let value = self.fmt(amount);
         let row = two_col(label, &value, cols);
         self.push_text_line(&row);
-        let ht_label = "(Hors TVA)";
+        let ht_label = self.labels.excl_tax_note;
         let ht_line = right_align(ht_label, cols);
         self.push_text_line(&ht_line);
         self
@@ -409,8 +432,8 @@ impl ReceiptBuilder {
         if amount <= Decimal::zero() { return self; }
         let cols = self.cols();
         let label = match coupon_code {
-            Some(code) => format!("REMISE ({})", code),
-            None       => "REMISE".to_owned(),
+            Some(code) => format!("{} ({})", self.labels.discount, code),
+            None       => self.labels.discount.to_owned(),
         };
         let value = format!("-{}", self.fmt(amount));
         let row = two_col(&label, &value, cols);
@@ -431,12 +454,14 @@ impl ReceiptBuilder {
             .map(|t| t.amount)
             .sum();
 
-        self.push_text_line("DETAIL DES TAXES:");
+        let tax_details_label = self.labels.tax_details;
+        let tax_included_label = self.labels.tax_included;
+        self.push_text_line(tax_details_label);
 
         for entry in entries {
             if entry.amount <= Decimal::zero() { continue; }
             let label = if entry.included {
-                format!("  {} (incluse)", entry.label)
+                format!("  {} ({})", entry.label, tax_included_label)
             } else {
                 format!("  {}", entry.label)
             };
@@ -452,7 +477,7 @@ impl ReceiptBuilder {
         if additional > Decimal::zero() {
             let sep = "-".repeat(cols.saturating_sub(2));
             self.push_text_line(&format!("  {}", sep));
-            let row = two_col("  Taxes additionnelles", &format!("+ {}", self.fmt(additional)), cols);
+            let row = two_col(&format!("  {}", self.labels.additional_taxes), &format!("+ {}", self.fmt(additional)), cols);
             self.push_text_line(&row);
         }
 
@@ -463,7 +488,7 @@ impl ReceiptBuilder {
     pub fn total(mut self, amount: Decimal) -> Self {
         let cols  = self.cols();
         let value = self.fmt(amount);
-        let row   = two_col("TOTAL", &value, cols);
+        let row   = two_col(self.labels.total, &value, cols);
         self = self.bold(true).double_height(true);
         self.push_text_line(&row);
         self = self.normal_size().bold(false);
@@ -475,7 +500,7 @@ impl ReceiptBuilder {
         if amount <= Decimal::zero() { return self; }
         let cols  = self.cols();
         let value = self.fmt(amount);
-        let row   = two_col("MONTANT RECU", &value, cols);
+        let row   = two_col(self.labels.received, &value, cols);
         self.push_text_line(&row);
         self
     }
@@ -485,23 +510,25 @@ impl ReceiptBuilder {
         if amount <= Decimal::zero() { return self; }
         let cols  = self.cols();
         let value = self.fmt(amount);
-        let row   = two_col("MONNAIE", &value, cols);
+        let row   = two_col(self.labels.change, &value, cols);
         self.push_text_line(&row);
         self
     }
 
     /// Print a "served by" footer line.
     pub fn served_by(mut self, name: &str) -> Self {
-        self.push_text_line(&format!("Servi par: {}", name));
+        self.push_text_line(&format!("{} {}", self.labels.served_by, name));
         self
     }
 
     /// Print a thank-you footer centred on the page.
     pub fn thank_you(self, shop_name: &str) -> Self {
+        let ty = self.labels.thank_you;
+        let see_you = format!("{} {}", self.labels.see_you_at, shop_name);
         self
             .align_center()
-            .text_line("Merci pour votre confiance!")
-            .text_line(&format!("A bientot chez {}", shop_name))
+            .text_line(ty)
+            .text_line(&see_you)
             .align_left()
     }
 }
@@ -553,6 +580,22 @@ pub mod wasm {
         /// Set currency symbol (default: `"FCFA"`).
         pub fn currency(self, symbol: &str) -> WasmReceiptBuilder {
             WasmReceiptBuilder { inner: self.inner.currency(symbol) }
+        }
+
+        /// Set receipt language: `"fr"`, `"en"`, `"es"`, `"pt"`, `"ar"`, `"wo"`.
+        pub fn language(self, lang: &str) -> Result<WasmReceiptBuilder, JsValue> {
+            let l = match lang.to_lowercase().as_str() {
+                "fr" | "french"     => Language::Fr,
+                "en" | "english"    => Language::En,
+                "es" | "spanish"    => Language::Es,
+                "pt" | "portuguese" => Language::Pt,
+                "ar" | "arabic"     => Language::Ar,
+                "wo" | "wolof"      => Language::Wo,
+                other => return Err(JsValue::from_str(
+                    &format!("thermoprint: unknown language '{}'. Use 'fr', 'en', 'es', 'pt', 'ar', or 'wo'", other)
+                )),
+            };
+            Ok(WasmReceiptBuilder { inner: self.inner.language(l) })
         }
 
         pub fn init(self)          -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.init() } }

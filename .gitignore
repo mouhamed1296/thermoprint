@@ -3,3 +3,4 @@
 /pkg-node
 Cargo.lock
 .DS_Store
+receipt.bin

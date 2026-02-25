@@ -2,8 +2,9 @@
  * thermoprint web example
  *
  * Loads the WASM package from ../../pkg/ (built by `make build-wasm`).
- * Serve this folder with any static server:
- *   npx serve examples/web
+ * Must be served from the project root:
+ *   npx serve .              # then open http://localhost:3000/examples/web/
+ *   python3 -m http.server   # then open http://localhost:8000/examples/web/
  */
 
 import init, { WasmReceiptBuilder } from '../../pkg/thermoprint.js';
@@ -22,11 +23,11 @@ async function boot() {
     await init();
     wasmReady = true;
     document.getElementById('build-btn').disabled = false;
-    addItem();   // one item row by default
-    addTax();    // one tax row by default
+    addItem();   // one default item row
+    addTax();    // one default tax row
     buildReceipt();
   } catch (e) {
-    showError('Failed to load WASM: ' + e.message);
+    showError('Failed to load WASM. Make sure you ran `make build-wasm` and are serving from the project root.\n\n' + e.message);
     console.error(e);
   }
 }
@@ -58,7 +59,7 @@ function addItem() {
         <input type="number" id="item-disc-${id}" value="" min="0" placeholder="0" />
       </div>
     </div>
-    <button class="btn-remove" type="button" data-remove="item-${id}" title="Remove item">✕</button>
+    <button class="btn-remove" type="button" title="Remove item">&times;</button>
   `;
   list.appendChild(row);
   row.querySelector('.btn-remove').addEventListener('click', () => {
@@ -94,7 +95,7 @@ function addTax() {
         </select>
       </div>
     </div>
-    <button class="btn-remove" type="button" data-remove="tax-${id}" title="Remove tax">✕</button>
+    <button class="btn-remove" type="button" title="Remove tax">&times;</button>
   `;
   list.appendChild(row);
   row.querySelector('.btn-remove').addEventListener('click', () => {
@@ -137,6 +138,7 @@ function buildReceipt() {
   const shopAddress = document.getElementById('shop-address').value.trim() || '';
   const currency    = document.getElementById('currency').value.trim()     || 'FCFA';
   const width       = document.getElementById('paper-width').value;
+  const lang        = document.getElementById('language').value;
   const received    = document.getElementById('received').value            || '0';
   const orderRef    = document.getElementById('order-ref').value.trim()    || '';
   const servedBy    = document.getElementById('served-by').value.trim()    || '';
@@ -148,39 +150,44 @@ function buildReceipt() {
   const taxes  = collectTaxes();
 
   try {
-    // ── Start builder ──────────────────────────────────────────────────────
+    // Note: wasm-bindgen keeps snake_case method names from Rust
     let b = new WasmReceiptBuilder(width);
-    b = b.currency(currency).init();
+    b = b.currency(currency);
+    b = b.language(lang);
+    b = b.init();
 
     // Header
-    if (shopName) b = b.shopHeader(shopName, shopPhone, shopAddress).divider('=');
+    if (shopName) {
+      b = b.shop_header(shopName, shopPhone, shopAddress);
+      b = b.divider('=');
+    }
 
     // Items
-    let subtotal = BigInt(0);
-    for (const item of items) {
-      const price = Math.round(parseFloat(item.price) || 0);
-      const disc  = item.discount ? Math.round(parseFloat(item.discount) || 0) : null;
-      const qty   = item.qty;
-      b = b.item(item.name, qty, String(price), disc ? String(disc) : null);
-      subtotal += BigInt(price) * BigInt(qty) - BigInt(disc ?? 0);
+    let subtotal = 0;
+    for (const it of items) {
+      const price = Math.round(parseFloat(it.price) || 0);
+      const disc  = it.discount ? Math.round(parseFloat(it.discount) || 0) : null;
+      const qty   = it.qty;
+      b = b.item(it.name, qty, String(price), disc ? String(disc) : undefined);
+      subtotal += price * qty - (disc ?? 0);
     }
 
     // Taxes & totals
     const nonIncludedTax = taxes
       .filter(t => !t.included && parseFloat(t.amount) > 0)
-      .reduce((s, t) => s + BigInt(Math.round(parseFloat(t.amount))), BigInt(0));
+      .reduce((s, t) => s + Math.round(parseFloat(t.amount) || 0), 0);
 
     const total = subtotal + nonIncludedTax;
 
     if (items.length > 0) {
-      b = b.divider('-').subtotalHt(String(subtotal));
+      b = b.divider('-');
+      b = b.subtotal_ht(String(subtotal));
     }
 
-    if (taxes.length > 0) {
-      for (const tax of taxes) {
-        if (parseFloat(tax.amount) > 0) {
-          b = b.addTax(tax.label, String(Math.round(parseFloat(tax.amount))), tax.included);
-        }
+    for (const tax of taxes) {
+      const amt = Math.round(parseFloat(tax.amount) || 0);
+      if (amt > 0) {
+        b = b.add_tax(tax.label, String(amt), tax.included);
       }
     }
 
@@ -189,21 +196,21 @@ function buildReceipt() {
     const recv = Math.round(parseFloat(received) || 0);
     if (recv > 0) {
       b = b.received(String(recv));
-      const change = recv - Number(total);
-      if (change > 0) b = b.change(String(change));
+      const ch = recv - total;
+      if (ch > 0) b = b.change(String(ch));
     }
 
     b = b.divider('=');
 
-    if (optBarcode && orderRef) b = b.barcodeCode128(orderRef);
-    if (servedBy) b = b.servedBy(servedBy);
-    if (optThanks && shopName) b = b.thankYou(shopName);
-    if (optCut) { b = b.feed(3).cut(); }
+    if (optBarcode && orderRef) b = b.barcode_code128(orderRef);
+    if (servedBy) b = b.served_by(servedBy);
+    if (optThanks && shopName) b = b.thank_you(shopName);
+    if (optCut) { b = b.feed(3); b = b.cut(); }
 
     const bytes = b.build();
     lastBytes = bytes;
 
-    renderPreview(bytes, currency);
+    renderPreview(bytes);
     updateStats(bytes, items, total, currency);
     renderHex(bytes);
 
@@ -220,36 +227,40 @@ function buildReceipt() {
 
 // ── Render receipt as text preview ───────────────────────────────────────────
 
-function renderPreview(bytes, _currency) {
-  const cols     = parseInt(document.getElementById('paper-width').value) === 58 ? 32 : 48;
+function renderPreview(bytes) {
+  const widthVal = document.getElementById('paper-width').value;
+  const cols     = widthVal === '58mm' ? 32 : (widthVal === 'a4' ? 90 : 48);
   const lines    = [];
   let   line     = '';
 
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i];
 
-    // Skip ESC sequences
+    // Skip ESC sequences (ESC + command byte, optionally + param)
     if (b === 0x1B) {
-      i++; // skip next byte
-      // ESC d n — skip one more
-      if (bytes[i] === 0x64) i++;
+      i++;
+      const cmd = bytes[i];
+      if (cmd === 0x64 || cmd === 0x74 || cmd === 0x21) i++; // ESC d n, ESC t n, ESC ! n
       continue;
     }
-    // Skip GS sequences (barcodes, QR, etc.)
+    // Skip GS sequences (barcodes, QR, cut, font size, etc.)
     if (b === 0x1D) {
       i++;
       const cmd = bytes[i];
-      if (cmd === 0x56) { i++; if (bytes[i] === 66) i++; } // cut
-      else if (cmd === 0x21) i++;     // font size
-      else if (cmd === 0x77) i++;     // barcode width
-      else if (cmd === 0x68) i++;     // barcode height
-      else if (cmd === 0x48) i++;     // HRI pos
-      else if (cmd === 0x66) i++;     // HRI font
+      if (cmd === 0x56) { // GS V — cut
+        i++;
+        if (bytes[i] === 66) i++; // GS V 66 n
+      }
+      else if (cmd === 0x21) i++;     // GS ! n — font size
+      else if (cmd === 0x77) i++;     // GS w n — barcode width
+      else if (cmd === 0x68) i++;     // GS h n — barcode height
+      else if (cmd === 0x48) i++;     // GS H n — HRI pos
+      else if (cmd === 0x66) i++;     // GS f n — HRI font
       else if (cmd === 0x6B) {        // GS k — barcode data
         i++;                          // skip type
-        const len = bytes[i]; i++;    // skip length byte
+        const len = bytes[i]; i++;    // length byte
         i += len - 1;                 // skip data
-      } else if (cmd === 0x28) {      // GS ( k — QR
+      } else if (cmd === 0x28) {      // GS ( k — QR / 2D
         i++;                          // skip 'k'
         const pL = bytes[i]; i++;
         const pH = bytes[i]; i++;
@@ -257,34 +268,30 @@ function renderPreview(bytes, _currency) {
       }
       continue;
     }
-    if (b === 0x0C) continue; // FF
-    if (b === 0x0A) {
-      lines.push(line);
-      line = '';
-      continue;
-    }
+    if (b === 0x0C) continue;         // FF
+    if (b === 0x0A) { lines.push(line); line = ''; continue; }
     if (b >= 0x20 && b < 0x80) line += String.fromCharCode(b);
     else if (b > 0x80) line += cp858Char(b);
   }
   if (line) lines.push(line);
 
-  const el = document.getElementById('receipt-text');
+  const el    = document.getElementById('receipt-text');
   const empty = document.getElementById('empty-state');
-  el.textContent = lines.join('\n');
+  el.textContent    = lines.join('\n');
   el.style.display  = 'block';
   empty.style.display = 'none';
-
-  // Adjust paper width
   el.style.fontSize = cols <= 32 ? '11px' : '12px';
 }
 
 // Minimal CP858 high-byte decode for preview
 function cp858Char(b) {
   const map = {
-    0x82:'é', 0x83:'â', 0x84:'ä', 0x85:'à', 0x87:'ç',
-    0x88:'ê', 0x89:'ë', 0x8A:'è', 0x8B:'ï', 0x8C:'î',
-    0x81:'ü', 0x90:'É', 0x93:'ô', 0x94:'ö', 0x96:'û',
-    0x97:'ù', 0xD5:'€', 0x80:'Ç', 0xA4:'ñ', 0xA5:'Ñ',
+    0x82:'e', 0x83:'a', 0x84:'a', 0x85:'a', 0x87:'c',
+    0x88:'e', 0x89:'e', 0x8A:'e', 0x8B:'i', 0x8C:'i',
+    0x81:'u', 0x90:'E', 0x93:'o', 0x94:'o', 0x96:'u',
+    0x97:'u', 0xD5:'E', 0x80:'C', 0xA4:'n', 0xA5:'N',
+    0xB7:'A', 0xB6:'A', 0xD4:'E', 0xD2:'E', 0xD7:'I',
+    0xE4:'O', 0xEB:'U', 0xEA:'U',
   };
   return map[b] ?? '?';
 }
@@ -350,7 +357,7 @@ document.getElementById('add-tax').addEventListener('click',  () => { addTax(); 
 
 // ── Form change listeners ─────────────────────────────────────────────────────
 
-['shop-name','shop-phone','shop-address','currency','paper-width',
+['shop-name','shop-phone','shop-address','currency','paper-width','language',
  'received','order-ref','served-by',
  'opt-barcode','opt-thankyou','opt-cut'].forEach(id => {
   const el = document.getElementById(id);
@@ -375,12 +382,12 @@ function showToast(msg) {
 }
 
 function showError(msg) {
-  const el = document.getElementById('receipt-text');
+  const el    = document.getElementById('receipt-text');
   const empty = document.getElementById('empty-state');
-  el.textContent = '⚠ ' + msg;
-  el.style.display   = 'block';
+  el.textContent      = msg;
+  el.style.display    = 'block';
   empty.style.display = 'none';
-  showToast('Error: ' + msg);
+  showToast('Error — check console');
 }
 
 // ── Start ─────────────────────────────────────────────────────────────────────

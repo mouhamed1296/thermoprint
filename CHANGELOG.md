@@ -9,6 +9,24 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-02-25
+
+### Added
+
+- **Multi-language support** (`Language` enum + `ReceiptLabels` struct in `i18n` module)
+  - French (default), English, Spanish, Portuguese, Arabic (Latin-transliterated), Wolof
+  - `ReceiptBuilder::language(lang)` to set receipt language
+  - `ReceiptBuilder::labels(labels)` for fully custom label overrides
+  - `WasmReceiptBuilder::language(lang_str)` for JS/WASM usage
+- `make serve-demo` — builds WASM and serves the web example locally
+
+### Fixed
+
+- Web example: corrected all method names to snake_case (wasm-bindgen convention)
+- Web example: fixed WASM loading by requiring project-root-relative serving
+- Web example: added language selector dropdown
+- Native example: accepts optional language argument (`en`, `es`, `pt`, `ar`, `wo`)
+
 ## [0.1.1] - 2026-02-25
 
 ### Added
