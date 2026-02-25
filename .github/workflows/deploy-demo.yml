@@ -1,0 +1,80 @@
+name: Deploy Demo
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "examples/web/**"
+      - "src/**"
+      - "Cargo.toml"
+      - ".github/workflows/deploy-demo.yml"
+  workflow_dispatch: # allow manual trigger
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Build & Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable + WASM target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM
+        run: >
+          wasm-pack build
+          --target web
+          --release
+          --out-dir pkg
+          --features wasm
+          --no-default-features
+
+      # Assemble site preserving the directory structure so that
+      # the relative import `../../pkg/thermoprint.js` in app.js works.
+      - name: Assemble site
+        run: |
+          mkdir -p _site/examples/web
+          mkdir -p _site/pkg
+          cp examples/web/index.html examples/web/style.css examples/web/app.js _site/examples/web/
+          cp pkg/thermoprint.js pkg/thermoprint_bg.wasm _site/pkg/
+          # Root redirect → examples/web/
+          cat > _site/index.html << 'REDIRECT'
+          <!DOCTYPE html>
+          <html>
+          <head><meta http-equiv="refresh" content="0;url=examples/web/"></head>
+          <body><a href="examples/web/">Go to Receipt Builder</a></body>
+          </html>
+          REDIRECT
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

@@ -7,10 +7,13 @@
 [![npm](https://img.shields.io/npm/v/thermoprint.svg)](https://www.npmjs.com/package/thermoprint)
 [![CI](https://github.com/mouhamed1296/thermoprint/actions/workflows/ci.yml/badge.svg)](https://github.com/mouhamed1296/thermoprint/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Live Demo](https://img.shields.io/badge/demo-Receipt%20Builder-e94560)](https://mouhamed1296.github.io/thermoprint/)
 
 > Fluent ESC/POS receipt builder for thermal printers — works natively in Rust and in any JavaScript runtime via WASM.
 
 Built by **Mamadou Sarr** — battle-tested on real POS hardware in Dakar, Senegal.
+
+**[Try the Receipt Builder →](https://mouhamed1296.github.io/thermoprint/)** — design your receipt visually, then copy the JS code.
 
 ---
 
