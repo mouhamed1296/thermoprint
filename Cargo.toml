@@ -1,0 +1,56 @@
+[package]
+name        = "thermoprint"
+version     = "0.1.0"
+edition     = "2021"
+authors     = ["Mamadou Sarr"]
+description = "A fluent ESC/POS receipt builder for thermal printers. Targets native (Tauri/desktop) and WASM/npm."
+license     = "MIT"
+repository  = "https://github.com/mouhamed1296/thermoprint"
+homepage    = "https://github.com/mouhamed1296/thermoprint"
+documentation = "https://docs.rs/thermoprint"
+keywords    = ["escpos", "thermal", "receipt", "printer", "wasm"]
+categories  = ["hardware-support", "encoding", "wasm"]
+readme      = "README.md"
+exclude     = [".github", "tests", "Makefile"]
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# ── Feature flags ──────────────────────────────────────────────────────────────
+# `native`  → enables image/logo support (pulls in the `image` crate)
+# `wasm`    → enables wasm-bindgen bindings
+# Default enables native so plain `cargo build` works out of the box.
+[features]
+default = ["native"]
+native  = ["dep:image"]
+wasm    = ["dep:wasm-bindgen", "dep:js-sys"]
+
+[dependencies]
+rust_decimal = { version = "1", features = ["serde", "macros"] }
+serde        = { version = "1", features = ["derive"] }
+thiserror    = "1"
+
+# Native-only (image processing for logo printing)
+image = { version = "0.25", optional = true, default-features = false, features = ["png", "jpeg"] }
+
+# WASM bindings
+wasm-bindgen = { version = "0.2", optional = true }
+js-sys       = { version = "0.3", optional = true }
+
+[dev-dependencies]
+# For running tests natively
+pretty_assertions  = "1"
+
+
+# ── WASM-pack profile ──────────────────────────────────────────────────────────
+[package.metadata.wasm-pack.profile.release]
+wasm-opt = ["-Oz", "--enable-mutable-globals"]
+
+# ── npm package metadata (written into pkg/package.json by wasm-pack) ──────────
+[package.metadata.wasm-pack.package]
+name        = "thermoprint"
+description = "Fluent ESC/POS receipt builder for thermal printers — WebUSB, WebSerial, Node.js"
+repository  = "https://github.com/mouhamed1296/thermoprint"
+homepage    = "https://github.com/mouhamed1296/thermoprint"
+license     = "MIT"
+keywords    = ["escpos", "thermal", "receipt", "printer", "wasm"]
