@@ -1,26 +1,35 @@
 /**
- * thermoprint — Receipt Builder
+ * thermoprint — Receipt Builder (for developers)
  *
- * Loads the WASM package from ../../pkg/ (built by `make build-wasm`).
- * Must be served from the project root:
- *   make serve-demo            # builds WASM + serves on :8000
- *   python3 -m http.server     # then open /examples/web/
+ * Rich semantic preview with proper alignment, barcode/QR rendering.
+ * WASM builds the real ESC/POS bytes; preview is built from form state.
+ *
+ * Serve from project root:  make serve-demo
  */
 
 import init, { WasmReceiptBuilder } from '../../pkg/thermoprint.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let wasmReady     = false;
-let lastBytes     = null;
-let lastCode      = '';
-let itemCount     = 0;
-let taxCount      = 0;
-let customCount   = 0;
-let receiptNo     = Math.floor(Math.random() * 90000) + 10000;
+let wasmReady   = false;
+let lastBytes   = null;
+let lastCode    = '';
+let itemCount   = 0;
+let taxCount    = 0;
+let customCount = 0;
+let receiptNo   = Math.floor(Math.random() * 90000) + 10000;
 
-// Alignment state (header/footer)
-const alignState  = { 'header-align': 'center', 'footer-align': 'center' };
+const alignState = { 'header-align': 'center', 'footer-align': 'center' };
+
+// Localized labels per language
+const LABELS = {
+  fr: { subtotal:'SOUS-TOTAL HT', total:'TOTAL TTC', received:'RECU', change:'MONNAIE', discount:'REMISE', servedBy:'Servi par', thanks:'Merci pour votre confiance!', inclTax:'(inclus)', exclTax:'(en sus)' },
+  en: { subtotal:'SUBTOTAL', total:'TOTAL', received:'RECEIVED', change:'CHANGE', discount:'DISCOUNT', servedBy:'Served by', thanks:'Thank you for your trust!', inclTax:'(included)', exclTax:'(excluded)' },
+  es: { subtotal:'SUBTOTAL', total:'TOTAL', received:'RECIBIDO', change:'CAMBIO', discount:'DESCUENTO', servedBy:'Atendido por', thanks:'Gracias por su confianza!', inclTax:'(incluido)', exclTax:'(excluido)' },
+  pt: { subtotal:'SUBTOTAL', total:'TOTAL', received:'RECEBIDO', change:'TROCO', discount:'DESCONTO', servedBy:'Atendido por', thanks:'Obrigado pela confianca!', inclTax:'(incluido)', exclTax:'(excluido)' },
+  ar: { subtotal:'AL-MAJMOU\' AL-JUZ\'I', total:'AL-MAJMOU\'', received:'AL-MABLAGH AL-MUSTALAM', change:'AL-BAQI', discount:'TAKHFID', servedBy:'Khadamakum', thanks:'Shukran lathiqatikum!', inclTax:'(mudamin)', exclTax:'(ghair mudamin)' },
+  wo: { subtotal:'TOLLU BI', total:'TOLLU', received:'JOTNA', change:'DEMM', discount:'WANAAG', servedBy:'Kii lay teg', thanks:'Jere jef ci sa gott!', inclTax:'(ci biir)', exclTax:'(ci biti)' },
+};
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -33,7 +42,7 @@ async function boot() {
     addTax();
     buildReceipt();
   } catch (e) {
-    showError('Failed to load WASM.\n\nMake sure you ran `make build-wasm` and are serving from the project root.\n\n' + e.message);
+    showError('Failed to load WASM.\n\nRun `make build-wasm` and serve from project root.\n\n' + e.message);
     console.error(e);
   }
 }
@@ -139,7 +148,6 @@ function addCustomLine(text = '', align = 'left') {
   list.appendChild(row);
   row.querySelector('.btn-remove').addEventListener('click', () => { row.remove(); buildReceipt(); });
   row.querySelector('input').addEventListener('input', buildReceipt);
-  // Align button wiring handled by delegation below
   alignState[`cline-align-${id}`] = align;
 }
 
@@ -165,7 +173,6 @@ function collectTaxes(subtotal) {
     const label = document.getElementById(`tax-label-${id}`).value.trim() || 'Tax';
     const amount = Math.round(subtotal * pct / 100);
 
-    // Update the computed display
     const comp = document.getElementById(`tax-computed-${id}`);
     if (comp) {
       const cur = document.getElementById('currency').value.trim() || 'FCFA';
@@ -184,6 +191,73 @@ function collectCustomLines() {
       align: alignState[`cline-align-${id}`] || 'left',
     };
   });
+}
+
+// ── Helpers for preview HTML ─────────────────────────────────────────────────
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function fmtMoney(n, cur) { return `${Math.round(n).toLocaleString()} ${cur}`; }
+
+function pLine(text, align = 'left', cls = '') {
+  return `<div class="r-line r-${align} ${cls}">${esc(text)}</div>`;
+}
+
+function pDivider(ch, cols) {
+  return `<div class="r-line r-divider">${ch.repeat(cols)}</div>`;
+}
+
+function pRow(left, right, cls = '') {
+  return `<div class="r-row ${cls}"><span class="r-row-left">${esc(left)}</span><span class="r-row-right">${esc(right)}</span></div>`;
+}
+
+function pBarcode(value) {
+  // Generate a visual barcode pattern from the string
+  const bars = [];
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    // Pseudo-random bar pattern from char code — visually convincing
+    bars.push(code % 2 === 0 ? 'bar' : 'bar thin');
+    bars.push('bar space');
+    bars.push(code % 3 === 0 ? 'bar thin' : 'bar');
+    bars.push('bar space thin');
+  }
+  // Add start/stop patterns
+  const startStop = ['bar', 'bar thin', 'bar space', 'bar', 'bar space thin', 'bar thin'];
+  const allBars = [...startStop, ...bars, ...startStop];
+  const barsHtml = allBars.map(b => `<div class="r-barcode-bar ${b.includes('thin') ? 'thin' : ''} ${b.includes('space') ? 'space' : ''}"></div>`).join('');
+  return `<div class="r-barcode"><div class="r-barcode-bars">${barsHtml}</div><div class="r-barcode-label">${esc(value)}</div></div>`;
+}
+
+function pQrCode(data) {
+  // Generate a deterministic QR-like grid from the data string
+  const size = 21; // QR version 1
+  const cells = [];
+  let hash = 0;
+  for (let i = 0; i < data.length; i++) hash = ((hash << 5) - hash + data.charCodeAt(i)) | 0;
+
+  for (let row = 0; row < size; row++) {
+    for (let col = 0; col < size; col++) {
+      // Finder patterns (top-left, top-right, bottom-left)
+      const inFinder = (r, c) => r < 7 && c < 7;
+      const isFinder = inFinder(row, col) || inFinder(row, col - (size - 7)) || inFinder(row - (size - 7), col);
+
+      if (isFinder) {
+        const lr = row < 7 ? row : row - (size - 7);
+        const lc = col < 7 ? col : col - (size - 7);
+        const border = lr === 0 || lr === 6 || lc === 0 || lc === 6;
+        const inner = lr >= 2 && lr <= 4 && lc >= 2 && lc <= 4;
+        cells.push(border || inner ? 'dark' : 'light');
+      } else {
+        // Data region: deterministic pseudo-random from hash + position
+        const seed = Math.abs((hash * (row + 1) * 7 + (col + 1) * 13) ^ (hash >> (row % 8)));
+        cells.push(seed % 3 !== 0 ? 'dark' : 'light');
+      }
+    }
+  }
+
+  const gridCss = `grid-template-columns: repeat(${size}, 4px)`;
+  const cellsHtml = cells.map(c => `<div class="r-qr-cell ${c}"></div>`).join('');
+  return `<div class="r-qr"><div class="r-qr-grid" style="${gridCss}">${cellsHtml}</div><div class="r-qr-label">${esc(data)}</div></div>`;
 }
 
 // ── Build receipt ─────────────────────────────────────────────────────────────
@@ -210,29 +284,27 @@ function buildReceipt() {
   const headerAlign = alignState['header-align'] || 'center';
   const footerAlign = alignState['footer-align'] || 'center';
 
-  const items       = collectItems();
+  const cols = width === '58mm' ? 32 : (width === 'a4' ? 90 : 48);
+  const items = collectItems();
+  const lbl = LABELS[lang] || LABELS.fr;
 
-  // Compute subtotal (before tax)
   let subtotal = 0;
-  for (const it of items) {
-    subtotal += it.price * it.qty - it.discount;
-  }
+  for (const it of items) subtotal += it.price * it.qty - it.discount;
 
-  const taxes       = collectTaxes(subtotal);
+  const taxes = collectTaxes(subtotal);
   const customLines = collectCustomLines();
-
-  // Non-included taxes add to total
   const nonIncludedTax = taxes.filter(t => !t.included).reduce((s, t) => s + t.amount, 0);
   const total = subtotal + nonIncludedTax;
+  const recv = Math.round(parseFloat(received) || 0);
 
+  // ── Build WASM bytes ──
   try {
+    const alignFn = { left: 'align_left', center: 'align_center', right: 'align_right' };
     let b = new WasmReceiptBuilder(width);
     b = b.currency(currency);
     b = b.language(lang);
     b = b.init();
 
-    // ── Header ──
-    const alignFn = { left: 'align_left', center: 'align_center', right: 'align_right' };
     b = b[alignFn[headerAlign]]();
     b = b.bold(true).double_size(true);
     b = b.text_line(shopName);
@@ -240,30 +312,24 @@ function buildReceipt() {
     if (shopPhone) b = b.text_line(shopPhone);
     if (shopAddress) b = b.text_line(shopAddress);
 
-    // Date & receipt number
     if (optDate || optRecNo) {
       b = b.align_left();
       b = b.divider('-');
       if (optDate) {
         const now = new Date();
-        const dateStr = now.toLocaleDateString() + '  ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-        b = b.text_line(dateStr);
+        b = b.text_line(now.toLocaleDateString() + '  ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
       }
-      if (optRecNo) {
-        b = b.text_line(`#${receiptNo}`);
-      }
+      if (optRecNo) b = b.text_line(`#${receiptNo}`);
     }
 
     b = b.align_left();
     b = b.divider('=');
 
-    // ── Items ──
     for (const it of items) {
       const disc = it.discount > 0 ? String(Math.round(it.discount)) : undefined;
       b = b.item(it.name, it.qty, String(Math.round(it.price)), disc);
     }
 
-    // ── Custom lines ──
     for (const cl of customLines) {
       if (!cl.text) continue;
       b = b[alignFn[cl.align]]();
@@ -271,23 +337,17 @@ function buildReceipt() {
       b = b.align_left();
     }
 
-    // ── Subtotal & taxes ──
     if (items.length > 0) {
       b = b.divider('-');
       b = b.subtotal_ht(String(Math.round(subtotal)));
     }
 
     for (const tax of taxes) {
-      if (tax.amount > 0) {
-        b = b.add_tax(tax.label, String(tax.amount), tax.included);
-      }
+      if (tax.amount > 0) b = b.add_tax(tax.label, String(tax.amount), tax.included);
     }
 
-    // ── Total ──
     b = b.total(String(Math.round(total)));
 
-    // ── Payment ──
-    const recv = Math.round(parseFloat(received) || 0);
     if (recv > 0) {
       b = b.received(String(recv));
       const ch = recv - Math.round(total);
@@ -296,7 +356,6 @@ function buildReceipt() {
 
     b = b.divider('=');
 
-    // ── Footer ──
     if (optBarcode && orderRef) b = b.barcode_code128(orderRef);
     if (optQr && qrData) b = b.qr_code(qrData, 6);
     if (servedBy) b = b.served_by(servedBy);
@@ -312,7 +371,88 @@ function buildReceipt() {
     const bytes = b.build();
     lastBytes = bytes;
 
-    // Generate JS code
+    // ── Build semantic preview HTML ──
+    const html = [];
+
+    // Header
+    html.push(pLine(shopName, headerAlign, 'r-big'));
+    if (shopPhone) html.push(pLine(shopPhone, headerAlign));
+    if (shopAddress) html.push(pLine(shopAddress, headerAlign));
+
+    // Date & receipt number
+    if (optDate || optRecNo) {
+      html.push(pDivider('-', cols));
+      if (optDate) {
+        const now = new Date();
+        html.push(pLine(now.toLocaleDateString() + '  ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), 'left'));
+      }
+      if (optRecNo) html.push(pLine(`#${receiptNo}`, 'left'));
+    }
+
+    html.push(pDivider('=', cols));
+
+    // Items
+    for (const it of items) {
+      const lineTotal = it.price * it.qty;
+      html.push(pRow(`${it.name} x${it.qty}`, fmtMoney(lineTotal, currency)));
+      if (it.discount > 0) {
+        html.push(pRow(`  ${lbl.discount}`, `- ${fmtMoney(it.discount, currency)}`));
+      }
+    }
+
+    // Custom lines
+    for (const cl of customLines) {
+      if (cl.text) html.push(pLine(cl.text, cl.align));
+    }
+
+    // Subtotal & taxes
+    if (items.length > 0) {
+      html.push(pDivider('-', cols));
+      html.push(pRow(lbl.subtotal, fmtMoney(subtotal, currency), 'r-bold'));
+    }
+
+    for (const tax of taxes) {
+      if (tax.amount > 0) {
+        const suffix = tax.included ? ` ${lbl.inclTax}` : ` ${lbl.exclTax}`;
+        html.push(pRow(`${tax.label}${suffix}`, fmtMoney(tax.amount, currency)));
+      }
+    }
+
+    // Total
+    html.push(pRow(lbl.total, fmtMoney(total, currency), 'r-row-total r-bold'));
+
+    // Payment
+    if (recv > 0) {
+      html.push(pRow(lbl.received, fmtMoney(recv, currency)));
+      const ch = recv - Math.round(total);
+      if (ch > 0) html.push(pRow(lbl.change, fmtMoney(ch, currency), 'r-bold'));
+    }
+
+    html.push(pDivider('=', cols));
+
+    // Barcode
+    if (optBarcode && orderRef) html.push(pBarcode(orderRef));
+
+    // QR code
+    if (optQr && qrData) html.push(pQrCode(qrData));
+
+    // Served by
+    if (servedBy) html.push(pLine(`${lbl.servedBy}: ${servedBy}`, 'center'));
+
+    // Thank you
+    if (optThanks && shopName) html.push(pLine(lbl.thanks, footerAlign, 'r-bold'));
+
+    // Cut
+    if (optCut) html.push('<div class="r-cut">--- CUT ---</div>');
+
+    // Render
+    const el = document.getElementById('receipt-content');
+    const empty = document.getElementById('empty-state');
+    el.innerHTML = html.join('');
+    el.style.display = 'block';
+    empty.style.display = 'none';
+
+    // Code gen
     lastCode = generateCode({
       shopName, shopPhone, shopAddress, currency, width, lang,
       headerAlign, footerAlign, items, taxes, customLines,
@@ -321,7 +461,6 @@ function buildReceipt() {
       receiptNo,
     });
 
-    renderPreview(bytes);
     updateStats(bytes, items, taxes, total, currency);
     renderHex(bytes);
     renderCode(lastCode);
@@ -341,142 +480,90 @@ function buildReceipt() {
 
 function generateCode(cfg) {
   const s = (v) => JSON.stringify(v);
-  const lines = [];
-  lines.push(`import init, { WasmReceiptBuilder } from 'thermoprint';`);
-  lines.push(`await init();`);
-  lines.push(``);
-  lines.push(`let b = new WasmReceiptBuilder(${s(cfg.width)});`);
-  lines.push(`b = b.currency(${s(cfg.currency)});`);
-  if (cfg.lang !== 'fr') lines.push(`b = b.language(${s(cfg.lang)});`);
-  lines.push(`b = b.init();`);
-  lines.push(``);
-  lines.push(`// Header`);
-  if (cfg.headerAlign !== 'center') lines.push(`b = b.align_${cfg.headerAlign}();`);
-  else lines.push(`b = b.align_center();`);
-  lines.push(`b = b.bold(true).double_size(true);`);
-  lines.push(`b = b.text_line(${s(cfg.shopName)});`);
-  lines.push(`b = b.bold(false).normal_size();`);
-  if (cfg.shopPhone) lines.push(`b = b.text_line(${s(cfg.shopPhone)});`);
-  if (cfg.shopAddress) lines.push(`b = b.text_line(${s(cfg.shopAddress)});`);
+  const L = [];
+  L.push(`import init, { WasmReceiptBuilder } from 'thermoprint';`);
+  L.push(`await init();`);
+  L.push(``);
+  L.push(`let b = new WasmReceiptBuilder(${s(cfg.width)});`);
+  L.push(`b = b.currency(${s(cfg.currency)});`);
+  if (cfg.lang !== 'fr') L.push(`b = b.language(${s(cfg.lang)});`);
+  L.push(`b = b.init();`);
+  L.push(``);
+
+  L.push(`// Header`);
+  L.push(`b = b.align_${cfg.headerAlign}();`);
+  L.push(`b = b.bold(true).double_size(true);`);
+  L.push(`b = b.text_line(${s(cfg.shopName)});`);
+  L.push(`b = b.bold(false).normal_size();`);
+  if (cfg.shopPhone) L.push(`b = b.text_line(${s(cfg.shopPhone)});`);
+  if (cfg.shopAddress) L.push(`b = b.text_line(${s(cfg.shopAddress)});`);
 
   if (cfg.optDate || cfg.optRecNo) {
-    lines.push(`b = b.align_left();`);
-    lines.push(`b = b.divider("-");`);
-    if (cfg.optDate) lines.push(`b = b.text_line(new Date().toLocaleString());`);
-    if (cfg.optRecNo) lines.push(`b = b.text_line("#${cfg.receiptNo}");`);
+    L.push(`b = b.align_left();`);
+    L.push(`b = b.divider("-");`);
+    if (cfg.optDate) L.push(`b = b.text_line(new Date().toLocaleString());`);
+    if (cfg.optRecNo) L.push(`b = b.text_line("#${cfg.receiptNo}");`);
   }
 
-  lines.push(`b = b.align_left();`);
-  lines.push(`b = b.divider("=");`);
-  lines.push(``);
+  L.push(`b = b.align_left();`);
+  L.push(`b = b.divider("=");`);
+  L.push(``);
 
-  lines.push(`// Items`);
+  L.push(`// Items`);
   for (const it of cfg.items) {
     const disc = it.discount > 0 ? s(String(Math.round(it.discount))) : 'undefined';
-    lines.push(`b = b.item(${s(it.name)}, ${it.qty}, ${s(String(Math.round(it.price)))}, ${disc});`);
+    L.push(`b = b.item(${s(it.name)}, ${it.qty}, ${s(String(Math.round(it.price)))}, ${disc});`);
   }
-  lines.push(``);
+  L.push(``);
 
   if (cfg.customLines.length > 0) {
-    lines.push(`// Custom lines`);
+    L.push(`// Custom lines`);
     for (const cl of cfg.customLines) {
       if (!cl.text) continue;
-      if (cl.align !== 'left') lines.push(`b = b.align_${cl.align}();`);
-      lines.push(`b = b.text_line(${s(cl.text)});`);
-      if (cl.align !== 'left') lines.push(`b = b.align_left();`);
+      if (cl.align !== 'left') L.push(`b = b.align_${cl.align}();`);
+      L.push(`b = b.text_line(${s(cl.text)});`);
+      if (cl.align !== 'left') L.push(`b = b.align_left();`);
     }
-    lines.push(``);
+    L.push(``);
   }
 
-  lines.push(`// Totals`);
-  lines.push(`b = b.divider("-");`);
-  lines.push(`b = b.subtotal_ht(${s(String(Math.round(cfg.subtotal)))});`);
+  L.push(`// Totals`);
+  if (cfg.items.length > 0) {
+    L.push(`b = b.divider("-");`);
+    L.push(`b = b.subtotal_ht(${s(String(Math.round(cfg.subtotal)))});`);
+  }
 
   for (const tax of cfg.taxes) {
     if (tax.amount > 0) {
-      lines.push(`b = b.add_tax(${s(tax.label)}, ${s(String(tax.amount))}, ${tax.included});`);
+      L.push(`b = b.add_tax(${s(tax.label)}, ${s(String(tax.amount))}, ${tax.included});`);
     }
   }
 
-  lines.push(`b = b.total(${s(String(Math.round(cfg.total)))});`);
+  L.push(`b = b.total(${s(String(Math.round(cfg.total)))});`);
 
   if (cfg.received > 0) {
-    lines.push(`b = b.received(${s(String(cfg.received))});`);
+    L.push(`b = b.received(${s(String(cfg.received))});`);
     const ch = cfg.received - Math.round(cfg.total);
-    if (ch > 0) lines.push(`b = b.change(${s(String(ch))});`);
+    if (ch > 0) L.push(`b = b.change(${s(String(ch))});`);
   }
 
-  lines.push(`b = b.divider("=");`);
-  lines.push(``);
+  L.push(`b = b.divider("=");`);
+  L.push(``);
 
-  lines.push(`// Footer`);
-  if (cfg.optBarcode && cfg.orderRef) lines.push(`b = b.barcode_code128(${s(cfg.orderRef)});`);
-  if (cfg.optQr && cfg.qrData) lines.push(`b = b.qr_code(${s(cfg.qrData)}, 6);`);
-  if (cfg.servedBy) lines.push(`b = b.served_by(${s(cfg.servedBy)});`);
-  if (cfg.optThanks) lines.push(`b = b.thank_you(${s(cfg.shopName)});`);
-  if (cfg.optCut) { lines.push(`b = b.feed(3);`); lines.push(`b = b.cut();`); }
-
-  lines.push(``);
-  lines.push(`const bytes = b.build(); // Uint8Array — send to printer`);
-
-  return lines.join('\n');
-}
-
-// ── Render receipt as text preview ───────────────────────────────────────────
-
-function renderPreview(bytes) {
-  const widthVal = document.getElementById('paper-width').value;
-  const cols     = widthVal === '58mm' ? 32 : (widthVal === 'a4' ? 90 : 48);
-  const lines    = [];
-  let   line     = '';
-
-  for (let i = 0; i < bytes.length; i++) {
-    const b = bytes[i];
-
-    if (b === 0x1B) {
-      i++;
-      const cmd = bytes[i];
-      if (cmd === 0x64 || cmd === 0x74 || cmd === 0x21) i++;
-      continue;
-    }
-    if (b === 0x1D) {
-      i++;
-      const cmd = bytes[i];
-      if (cmd === 0x56) { i++; if (bytes[i] === 66) i++; }
-      else if (cmd === 0x21) i++;
-      else if (cmd === 0x77) i++;
-      else if (cmd === 0x68) i++;
-      else if (cmd === 0x48) i++;
-      else if (cmd === 0x66) i++;
-      else if (cmd === 0x6B) { i++; const len = bytes[i]; i++; i += len - 1; }
-      else if (cmd === 0x28) { i++; const pL = bytes[i]; i++; const pH = bytes[i]; i++; i += (pH << 8 | pL) - 1; }
-      continue;
-    }
-    if (b === 0x0C) continue;
-    if (b === 0x0A) { lines.push(line); line = ''; continue; }
-    if (b >= 0x20 && b < 0x80) line += String.fromCharCode(b);
-    else if (b > 0x80) line += cp858Char(b);
+  L.push(`// Footer`);
+  if (cfg.optBarcode && cfg.orderRef) L.push(`b = b.barcode_code128(${s(cfg.orderRef)});`);
+  if (cfg.optQr && cfg.qrData) L.push(`b = b.qr_code(${s(cfg.qrData)}, 6);`);
+  if (cfg.servedBy) L.push(`b = b.served_by(${s(cfg.servedBy)});`);
+  if (cfg.optThanks) {
+    if (cfg.footerAlign !== 'center') L.push(`b = b.align_${cfg.footerAlign}();`);
+    L.push(`b = b.thank_you(${s(cfg.shopName)});`);
   }
-  if (line) lines.push(line);
+  if (cfg.optCut) { L.push(`b = b.feed(3);`); L.push(`b = b.cut();`); }
 
-  const el    = document.getElementById('receipt-text');
-  const empty = document.getElementById('empty-state');
-  el.textContent      = lines.join('\n');
-  el.style.display    = 'block';
-  empty.style.display = 'none';
-  el.style.fontSize   = cols <= 32 ? '11px' : '12px';
-}
+  L.push(``);
+  L.push(`const bytes = b.build(); // Uint8Array — send to printer`);
 
-function cp858Char(b) {
-  const map = {
-    0x82:'e',0x83:'a',0x84:'a',0x85:'a',0x87:'c',
-    0x88:'e',0x89:'e',0x8A:'e',0x8B:'i',0x8C:'i',
-    0x81:'u',0x90:'E',0x93:'o',0x94:'o',0x96:'u',
-    0x97:'u',0xD5:'E',0x80:'C',0xA4:'n',0xA5:'N',
-    0xB7:'A',0xB6:'A',0xD4:'E',0xD2:'E',0xD7:'I',
-    0xE4:'O',0xEB:'U',0xEA:'U',
-  };
-  return map[b] ?? '?';
+  return L.join('\n');
 }
 
 // ── Render code output ───────────────────────────────────────────────────────
@@ -599,7 +686,7 @@ function showToast(msg) {
 }
 
 function showError(msg) {
-  const el    = document.getElementById('receipt-text');
+  const el = document.getElementById('receipt-content');
   const empty = document.getElementById('empty-state');
   el.textContent      = msg;
   el.style.display    = 'block';

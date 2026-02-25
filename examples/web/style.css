@@ -414,14 +414,101 @@ body {
   background-color: var(--paper-bg);
 }
 
-.receipt-text {
+/* ── Rich receipt content ── */
+.receipt-content {
   font-family: 'Courier New', Courier, monospace;
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--paper-txt);
+  overflow-x: hidden;
+}
+
+.r-line {
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-height: 1.6em;
+}
+.r-center { text-align: center; }
+.r-right  { text-align: right; }
+.r-left   { text-align: left; }
+.r-bold   { font-weight: 700; }
+.r-big    { font-size: 20px; font-weight: 700; }
+.r-dbl-h  { font-size: 16px; }
+.r-underline { text-decoration: underline; }
+
+.r-divider {
   white-space: pre;
   color: var(--paper-txt);
-  overflow-x: auto;
+  opacity: 0.5;
+  letter-spacing: 1px;
 }
+
+.r-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.r-row-left  { flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+.r-row-right { text-align: right; white-space: nowrap; font-weight: 600; }
+.r-row-total { font-weight: 700; font-size: 15px; }
+
+.r-barcode {
+  text-align: center;
+  padding: 12px 0;
+}
+.r-barcode-bars {
+  display: flex;
+  justify-content: center;
+  gap: 1px;
+  margin-bottom: 4px;
+}
+.r-barcode-bar {
+  width: 2px;
+  height: 50px;
+  background: var(--paper-txt);
+}
+.r-barcode-bar.thin { width: 1px; }
+.r-barcode-bar.space { background: transparent; }
+.r-barcode-label {
+  font-size: 10px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 2px;
+}
+
+.r-qr {
+  text-align: center;
+  padding: 12px 0;
+}
+.r-qr-grid {
+  display: inline-grid;
+  gap: 0;
+  border: 4px solid var(--paper-txt);
+  padding: 4px;
+  background: #fff;
+}
+.r-qr-cell {
+  width: 4px;
+  height: 4px;
+}
+.r-qr-cell.dark { background: var(--paper-txt); }
+.r-qr-cell.light { background: #fff; }
+.r-qr-label {
+  font-size: 9px;
+  color: #888;
+  margin-top: 4px;
+}
+
+.r-cut {
+  text-align: center;
+  margin: 8px 0;
+  border-top: 2px dashed #ccc;
+  padding-top: 4px;
+  font-size: 10px;
+  color: #bbb;
+  letter-spacing: 1px;
+}
+
+.r-blank { height: 1.6em; }
 
 /* ── Empty state ── */
 .empty-state {
