@@ -9,6 +9,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-02-25
+
+### Added
+- `WasmReceiptBuilder::add_tax(label, amount, included)` — add individual tax lines from JavaScript
+- `examples/native.rs` — Rust CLI example that writes a full receipt to `receipt.bin`
+- `examples/web/` — self-contained web app demonstrating the WASM API with a live receipt builder UI
+
+### Fixed
+- `missing_docs` warnings on `WasmReceiptBuilder` methods suppressed with `#[allow(missing_docs)]`
+
 ## [0.1.0] - 2026-02-24
 
 ### Added

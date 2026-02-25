@@ -618,6 +618,14 @@ pub mod wasm {
             Ok(WasmReceiptBuilder { inner: self.inner.subtotal_ht(parse_decimal(amount)?) })
         }
 
+        /// Add a single tax line. Call once per tax entry.
+        /// `amount` is a decimal string; `included` is whether the tax is already in the item prices.
+        pub fn add_tax(self, label: &str, amount: &str, included: bool) -> Result<WasmReceiptBuilder, JsValue> {
+            let amt = parse_decimal(amount)?;
+            let entry = crate::types::TaxEntry::new(label, amt, included);
+            Ok(WasmReceiptBuilder { inner: self.inner.taxes(&[entry]) })
+        }
+
         pub fn discount(self, amount: &str, coupon_code: Option<String>) -> Result<WasmReceiptBuilder, JsValue> {
             Ok(WasmReceiptBuilder {
                 inner: self.inner.discount(parse_decimal(amount)?, coupon_code.as_deref())

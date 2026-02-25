@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>thermoprint — Web Demo</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app">
+    <!-- ── Sidebar: Receipt Builder ── -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <div class="logo-row">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="7" width="16" height="10" rx="2" fill="#1e293b"/>
+            <rect x="3" y="7" width="16" height="4" rx="2" fill="#e94560"/>
+            <rect x="6" y="12" width="10" height="1.2" rx="0.6" fill="#334155"/>
+            <rect x="7" y="14" width="8" height="5" rx="1" fill="#f1f5f9"/>
+            <rect x="8.5" y="15.5" width="1" height="2.5" fill="#334155"/>
+            <rect x="10" y="15.5" width="1.5" height="2.5" fill="#334155"/>
+            <rect x="12" y="15.5" width="1" height="2.5" fill="#334155"/>
+            <circle cx="17" cy="9" r="1" fill="#4ecca3"/>
+          </svg>
+          <span class="logo-text">thermo<span class="accent">print</span></span>
+        </div>
+        <p class="subtitle">ESC/POS Receipt Builder</p>
+      </div>
+
+      <form id="receipt-form">
+        <!-- Shop -->
+        <section class="form-section">
+          <h3 class="section-title">Shop</h3>
+          <div class="field">
+            <label>Shop Name</label>
+            <input type="text" id="shop-name" value="MA BOUTIQUE" />
+          </div>
+          <div class="field">
+            <label>Phone</label>
+            <input type="text" id="shop-phone" value="+221 77 000 00 00" />
+          </div>
+          <div class="field">
+            <label>Address</label>
+            <input type="text" id="shop-address" value="Dakar, Sénégal" />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label>Currency</label>
+              <input type="text" id="currency" value="FCFA" maxlength="8" />
+            </div>
+            <div class="field">
+              <label>Paper Width</label>
+              <select id="paper-width">
+                <option value="58mm">58 mm</option>
+                <option value="80mm" selected>80 mm</option>
+                <option value="a4">A4</option>
+              </select>
+            </div>
+          </div>
+        </section>
+
+        <!-- Items -->
+        <section class="form-section">
+          <h3 class="section-title">
+            Items
+            <button type="button" class="btn-add" id="add-item">+ Add</button>
+          </h3>
+          <div id="items-list"></div>
+        </section>
+
+        <!-- Tax -->
+        <section class="form-section">
+          <h3 class="section-title">
+            Taxes
+            <button type="button" class="btn-add" id="add-tax">+ Add</button>
+          </h3>
+          <div id="taxes-list"></div>
+        </section>
+
+        <!-- Payment -->
+        <section class="form-section">
+          <h3 class="section-title">Payment</h3>
+          <div class="field-row">
+            <div class="field">
+              <label>Received</label>
+              <input type="number" id="received" value="100000" min="0" />
+            </div>
+            <div class="field">
+              <label>Order Ref</label>
+              <input type="text" id="order-ref" value="ORD-2024-001" />
+            </div>
+          </div>
+          <div class="field">
+            <label>Served by</label>
+            <input type="text" id="served-by" value="Mamadou" />
+          </div>
+        </section>
+
+        <!-- Options -->
+        <section class="form-section">
+          <h3 class="section-title">Options</h3>
+          <div class="checkboxes">
+            <label class="checkbox-label">
+              <input type="checkbox" id="opt-barcode" checked /> Print barcode
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="opt-thankyou" checked /> Thank-you footer
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="opt-cut" checked /> Paper cut
+            </label>
+          </div>
+        </section>
+
+        <button type="submit" class="btn-build" id="build-btn">
+          <span id="build-label">Build Receipt</span>
+        </button>
+      </form>
+    </aside>
+
+    <!-- ── Main: Preview + Download ── -->
+    <main class="preview-pane">
+      <div class="preview-toolbar">
+        <span class="preview-title">Receipt Preview</span>
+        <div class="toolbar-actions">
+          <button class="btn-icon" id="download-btn" disabled title="Download .bin">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            Download .bin
+          </button>
+          <button class="btn-icon" id="copy-hex-btn" disabled title="Copy hex">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+            </svg>
+            Copy hex
+          </button>
+        </div>
+      </div>
+
+      <div class="receipt-wrapper">
+        <div class="receipt-paper" id="receipt-paper">
+          <div class="empty-state" id="empty-state">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="8" y="14" width="32" height="24" rx="4" fill="#1e293b"/>
+              <rect x="8" y="14" width="32" height="8" rx="4" fill="#e94560" opacity="0.7"/>
+              <rect x="14" y="25" width="20" height="2" rx="1" fill="#334155"/>
+              <rect x="16" y="29" width="16" height="12" rx="2" fill="#f1f5f9" opacity="0.9"/>
+            </svg>
+            <p>Fill in the form and click<br/><strong>Build Receipt</strong></p>
+          </div>
+          <pre class="receipt-text" id="receipt-text" style="display:none"></pre>
+        </div>
+      </div>
+
+      <div class="stats-bar" id="stats-bar" style="display:none">
+        <span id="stat-bytes">0 bytes</span>
+        <span class="stat-sep">·</span>
+        <span id="stat-items">0 items</span>
+        <span class="stat-sep">·</span>
+        <span id="stat-total">Total: 0 FCFA</span>
+      </div>
+
+      <div class="hex-panel" id="hex-panel" style="display:none">
+        <div class="hex-header">
+          <span>Raw ESC/POS bytes (hex)</span>
+          <button class="btn-text" id="toggle-hex">Hide</button>
+        </div>
+        <pre class="hex-dump" id="hex-dump"></pre>
+      </div>
+    </main>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

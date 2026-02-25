@@ -1,6 +1,6 @@
 [package]
 name        = "thermoprint"
-version     = "0.1.0"
+version     = "0.1.1"
 edition     = "2021"
 authors     = ["Mamadou Sarr"]
 description = "A fluent ESC/POS receipt builder for thermal printers. Targets native (Tauri/desktop) and WASM/npm."
