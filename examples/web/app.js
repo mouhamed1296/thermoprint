@@ -1,20 +1,26 @@
 /**
- * thermoprint web example
+ * thermoprint — Receipt Builder
  *
  * Loads the WASM package from ../../pkg/ (built by `make build-wasm`).
  * Must be served from the project root:
- *   npx serve .              # then open http://localhost:3000/examples/web/
- *   python3 -m http.server   # then open http://localhost:8000/examples/web/
+ *   make serve-demo            # builds WASM + serves on :8000
+ *   python3 -m http.server     # then open /examples/web/
  */
 
 import init, { WasmReceiptBuilder } from '../../pkg/thermoprint.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
-let wasmReady = false;
-let lastBytes  = null;
-let itemCount  = 0;
-let taxCount   = 0;
+let wasmReady     = false;
+let lastBytes     = null;
+let lastCode      = '';
+let itemCount     = 0;
+let taxCount      = 0;
+let customCount   = 0;
+let receiptNo     = Math.floor(Math.random() * 90000) + 10000;
+
+// Alignment state (header/footer)
+const alignState  = { 'header-align': 'center', 'footer-align': 'center' };
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 
@@ -23,18 +29,18 @@ async function boot() {
     await init();
     wasmReady = true;
     document.getElementById('build-btn').disabled = false;
-    addItem();   // one default item row
-    addTax();    // one default tax row
+    addItem();
+    addTax();
     buildReceipt();
   } catch (e) {
-    showError('Failed to load WASM. Make sure you ran `make build-wasm` and are serving from the project root.\n\n' + e.message);
+    showError('Failed to load WASM.\n\nMake sure you ran `make build-wasm` and are serving from the project root.\n\n' + e.message);
     console.error(e);
   }
 }
 
 // ── Item rows ─────────────────────────────────────────────────────────────────
 
-function addItem() {
+function addItem(name = 'Polo Ralph Lauren', qty = 1, price = 15000, disc = '') {
   const id = ++itemCount;
   const list = document.getElementById('items-list');
   const row = document.createElement('div');
@@ -44,34 +50,31 @@ function addItem() {
     <div class="item-row-grid">
       <div class="field">
         <label for="item-name-${id}">Name</label>
-        <input type="text" id="item-name-${id}" value="Polo Ralph Lauren" />
+        <input type="text" id="item-name-${id}" value="${name}" />
       </div>
       <div class="field">
         <label for="item-qty-${id}">Qty</label>
-        <input type="number" id="item-qty-${id}" value="1" min="1" />
+        <input type="number" id="item-qty-${id}" value="${qty}" min="1" />
       </div>
       <div class="field">
-        <label for="item-price-${id}">Price</label>
-        <input type="number" id="item-price-${id}" value="15000" min="0" />
+        <label for="item-price-${id}">Unit Price</label>
+        <input type="number" id="item-price-${id}" value="${price}" min="0" />
       </div>
       <div class="field">
         <label for="item-disc-${id}">Discount</label>
-        <input type="number" id="item-disc-${id}" value="" min="0" placeholder="0" />
+        <input type="number" id="item-disc-${id}" value="${disc}" min="0" placeholder="0" />
       </div>
     </div>
     <button class="btn-remove" type="button" title="Remove item">&times;</button>
   `;
   list.appendChild(row);
-  row.querySelector('.btn-remove').addEventListener('click', () => {
-    row.remove();
-    buildReceipt();
-  });
+  row.querySelector('.btn-remove').addEventListener('click', () => { row.remove(); buildReceipt(); });
   row.querySelectorAll('input').forEach(i => i.addEventListener('input', buildReceipt));
 }
 
-// ── Tax rows ──────────────────────────────────────────────────────────────────
+// ── Tax rows (percentage-based, auto-calculated) ─────────────────────────────
 
-function addTax() {
+function addTax(label = 'TVA', pct = 18, included = true) {
   const id = ++taxCount;
   const list = document.getElementById('taxes-list');
   const row = document.createElement('div');
@@ -81,54 +84,109 @@ function addTax() {
     <div class="tax-row-grid">
       <div class="field">
         <label for="tax-label-${id}">Label</label>
-        <input type="text" id="tax-label-${id}" value="TVA 18%" />
+        <input type="text" id="tax-label-${id}" value="${label}" />
       </div>
       <div class="field">
-        <label for="tax-amount-${id}">Amount</label>
-        <input type="number" id="tax-amount-${id}" value="0" min="0" />
+        <label for="tax-pct-${id}">Rate %</label>
+        <input type="number" id="tax-pct-${id}" value="${pct}" min="0" max="100" step="0.1" />
       </div>
       <div class="field">
         <label for="tax-included-${id}">Included</label>
         <select id="tax-included-${id}">
-          <option value="true" selected>Yes</option>
-          <option value="false">No</option>
+          <option value="true" ${included ? 'selected' : ''}>Yes</option>
+          <option value="false" ${!included ? 'selected' : ''}>No</option>
         </select>
       </div>
+      <button class="btn-remove" type="button" title="Remove tax">&times;</button>
     </div>
-    <button class="btn-remove" type="button" title="Remove tax">&times;</button>
+    <div class="tax-computed" id="tax-computed-${id}">= 0</div>
   `;
   list.appendChild(row);
-  row.querySelector('.btn-remove').addEventListener('click', () => {
-    row.remove();
-    buildReceipt();
-  });
+  row.querySelector('.btn-remove').addEventListener('click', () => { row.remove(); buildReceipt(); });
   row.querySelectorAll('input, select').forEach(i => i.addEventListener('input', buildReceipt));
 }
 
-// ── Build receipt ─────────────────────────────────────────────────────────────
+// ── Custom text line rows ────────────────────────────────────────────────────
+
+function addCustomLine(text = '', align = 'left') {
+  const id = ++customCount;
+  const list = document.getElementById('custom-lines-list');
+  const row = document.createElement('div');
+  row.className = 'custom-line-row';
+  row.id = `cline-${id}`;
+  row.innerHTML = `
+    <div class="custom-line-grid">
+      <div class="field">
+        <label for="cline-text-${id}">Text</label>
+        <div class="input-with-align">
+          <input type="text" id="cline-text-${id}" value="${text}" placeholder="Extra info..." />
+          <div class="align-btns" data-target="cline-align-${id}">
+            <button type="button" class="align-btn ${align === 'left' ? 'active' : ''}" data-align="left" title="Left">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+            </button>
+            <button type="button" class="align-btn ${align === 'center' ? 'active' : ''}" data-align="center" title="Center">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="18" y1="18" x2="6" y2="18"/></svg>
+            </button>
+            <button type="button" class="align-btn ${align === 'right' ? 'active' : ''}" data-align="right" title="Right">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+      <button class="btn-remove" type="button" title="Remove">&times;</button>
+    </div>
+  `;
+  list.appendChild(row);
+  row.querySelector('.btn-remove').addEventListener('click', () => { row.remove(); buildReceipt(); });
+  row.querySelector('input').addEventListener('input', buildReceipt);
+  // Align button wiring handled by delegation below
+  alignState[`cline-align-${id}`] = align;
+}
+
+// ── Collect form data ────────────────────────────────────────────────────────
 
 function collectItems() {
   return [...document.querySelectorAll('.item-row')].map(row => {
     const id = row.id.replace('item-', '');
     return {
       name:     document.getElementById(`item-name-${id}`).value.trim() || 'Article',
-      qty:      parseInt(document.getElementById(`item-qty-${id}`).value)  || 1,
-      price:    document.getElementById(`item-price-${id}`).value          || '0',
-      discount: document.getElementById(`item-disc-${id}`).value.trim()    || null,
+      qty:      parseInt(document.getElementById(`item-qty-${id}`).value) || 1,
+      price:    parseFloat(document.getElementById(`item-price-${id}`).value) || 0,
+      discount: parseFloat(document.getElementById(`item-disc-${id}`).value) || 0,
     };
   });
 }
 
-function collectTaxes() {
+function collectTaxes(subtotal) {
   return [...document.querySelectorAll('.tax-row')].map(row => {
-    const id = row.id.replace('tax-', '');
+    const id  = row.id.replace('tax-', '');
+    const pct = parseFloat(document.getElementById(`tax-pct-${id}`).value) || 0;
+    const included = document.getElementById(`tax-included-${id}`).value === 'true';
+    const label = document.getElementById(`tax-label-${id}`).value.trim() || 'Tax';
+    const amount = Math.round(subtotal * pct / 100);
+
+    // Update the computed display
+    const comp = document.getElementById(`tax-computed-${id}`);
+    if (comp) {
+      const cur = document.getElementById('currency').value.trim() || 'FCFA';
+      comp.textContent = `= ${amount.toLocaleString()} ${cur} (${pct}%)`;
+    }
+
+    return { label: `${label} ${pct}%`, amount, included, pct };
+  });
+}
+
+function collectCustomLines() {
+  return [...document.querySelectorAll('.custom-line-row')].map(row => {
+    const id = row.id.replace('cline-', '');
     return {
-      label:    document.getElementById(`tax-label-${id}`).value.trim() || 'Tax',
-      amount:   document.getElementById(`tax-amount-${id}`).value       || '0',
-      included: document.getElementById(`tax-included-${id}`).value === 'true',
+      text:  document.getElementById(`cline-text-${id}`).value || '',
+      align: alignState[`cline-align-${id}`] || 'left',
     };
   });
 }
+
+// ── Build receipt ─────────────────────────────────────────────────────────────
 
 function buildReceipt() {
   if (!wasmReady) return;
@@ -142,87 +200,226 @@ function buildReceipt() {
   const received    = document.getElementById('received').value            || '0';
   const orderRef    = document.getElementById('order-ref').value.trim()    || '';
   const servedBy    = document.getElementById('served-by').value.trim()    || '';
+  const optDate     = document.getElementById('opt-date').checked;
+  const optRecNo    = document.getElementById('opt-receipt-no').checked;
   const optBarcode  = document.getElementById('opt-barcode').checked;
+  const optQr       = document.getElementById('opt-qr').checked;
   const optThanks   = document.getElementById('opt-thankyou').checked;
   const optCut      = document.getElementById('opt-cut').checked;
+  const qrData      = document.getElementById('qr-data').value.trim()     || '';
+  const headerAlign = alignState['header-align'] || 'center';
+  const footerAlign = alignState['footer-align'] || 'center';
 
-  const items  = collectItems();
-  const taxes  = collectTaxes();
+  const items       = collectItems();
+
+  // Compute subtotal (before tax)
+  let subtotal = 0;
+  for (const it of items) {
+    subtotal += it.price * it.qty - it.discount;
+  }
+
+  const taxes       = collectTaxes(subtotal);
+  const customLines = collectCustomLines();
+
+  // Non-included taxes add to total
+  const nonIncludedTax = taxes.filter(t => !t.included).reduce((s, t) => s + t.amount, 0);
+  const total = subtotal + nonIncludedTax;
 
   try {
-    // Note: wasm-bindgen keeps snake_case method names from Rust
     let b = new WasmReceiptBuilder(width);
     b = b.currency(currency);
     b = b.language(lang);
     b = b.init();
 
-    // Header
-    if (shopName) {
-      b = b.shop_header(shopName, shopPhone, shopAddress);
-      b = b.divider('=');
-    }
+    // ── Header ──
+    const alignFn = { left: 'align_left', center: 'align_center', right: 'align_right' };
+    b = b[alignFn[headerAlign]]();
+    b = b.bold(true).double_size(true);
+    b = b.text_line(shopName);
+    b = b.bold(false).normal_size();
+    if (shopPhone) b = b.text_line(shopPhone);
+    if (shopAddress) b = b.text_line(shopAddress);
 
-    // Items
-    let subtotal = 0;
-    for (const it of items) {
-      const price = Math.round(parseFloat(it.price) || 0);
-      const disc  = it.discount ? Math.round(parseFloat(it.discount) || 0) : null;
-      const qty   = it.qty;
-      b = b.item(it.name, qty, String(price), disc ? String(disc) : undefined);
-      subtotal += price * qty - (disc ?? 0);
-    }
-
-    // Taxes & totals
-    const nonIncludedTax = taxes
-      .filter(t => !t.included && parseFloat(t.amount) > 0)
-      .reduce((s, t) => s + Math.round(parseFloat(t.amount) || 0), 0);
-
-    const total = subtotal + nonIncludedTax;
-
-    if (items.length > 0) {
+    // Date & receipt number
+    if (optDate || optRecNo) {
+      b = b.align_left();
       b = b.divider('-');
-      b = b.subtotal_ht(String(subtotal));
-    }
-
-    for (const tax of taxes) {
-      const amt = Math.round(parseFloat(tax.amount) || 0);
-      if (amt > 0) {
-        b = b.add_tax(tax.label, String(amt), tax.included);
+      if (optDate) {
+        const now = new Date();
+        const dateStr = now.toLocaleDateString() + '  ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        b = b.text_line(dateStr);
+      }
+      if (optRecNo) {
+        b = b.text_line(`#${receiptNo}`);
       }
     }
 
-    b = b.total(String(total));
+    b = b.align_left();
+    b = b.divider('=');
 
+    // ── Items ──
+    for (const it of items) {
+      const disc = it.discount > 0 ? String(Math.round(it.discount)) : undefined;
+      b = b.item(it.name, it.qty, String(Math.round(it.price)), disc);
+    }
+
+    // ── Custom lines ──
+    for (const cl of customLines) {
+      if (!cl.text) continue;
+      b = b[alignFn[cl.align]]();
+      b = b.text_line(cl.text);
+      b = b.align_left();
+    }
+
+    // ── Subtotal & taxes ──
+    if (items.length > 0) {
+      b = b.divider('-');
+      b = b.subtotal_ht(String(Math.round(subtotal)));
+    }
+
+    for (const tax of taxes) {
+      if (tax.amount > 0) {
+        b = b.add_tax(tax.label, String(tax.amount), tax.included);
+      }
+    }
+
+    // ── Total ──
+    b = b.total(String(Math.round(total)));
+
+    // ── Payment ──
     const recv = Math.round(parseFloat(received) || 0);
     if (recv > 0) {
       b = b.received(String(recv));
-      const ch = recv - total;
+      const ch = recv - Math.round(total);
       if (ch > 0) b = b.change(String(ch));
     }
 
     b = b.divider('=');
 
+    // ── Footer ──
     if (optBarcode && orderRef) b = b.barcode_code128(orderRef);
+    if (optQr && qrData) b = b.qr_code(qrData, 6);
     if (servedBy) b = b.served_by(servedBy);
-    if (optThanks && shopName) b = b.thank_you(shopName);
+
+    if (optThanks && shopName) {
+      if (footerAlign !== 'center') b = b[alignFn[footerAlign]]();
+      b = b.thank_you(shopName);
+      b = b.align_left();
+    }
+
     if (optCut) { b = b.feed(3); b = b.cut(); }
 
     const bytes = b.build();
     lastBytes = bytes;
 
-    renderPreview(bytes);
-    updateStats(bytes, items, total, currency);
-    renderHex(bytes);
+    // Generate JS code
+    lastCode = generateCode({
+      shopName, shopPhone, shopAddress, currency, width, lang,
+      headerAlign, footerAlign, items, taxes, customLines,
+      subtotal, total, received: recv, orderRef, servedBy,
+      optDate, optRecNo, optBarcode, optQr, qrData, optThanks, optCut,
+      receiptNo,
+    });
 
-    document.getElementById('download-btn').disabled   = false;
+    renderPreview(bytes);
+    updateStats(bytes, items, taxes, total, currency);
+    renderHex(bytes);
+    renderCode(lastCode);
+
+    document.getElementById('download-btn').disabled  = false;
     document.getElementById('copy-hex-btn').disabled   = false;
-    document.getElementById('hex-panel').style.display = 'flex';
+    document.getElementById('copy-code-btn').disabled  = false;
     document.getElementById('stats-bar').style.display = 'flex';
 
   } catch (e) {
     showError(e.message || String(e));
     console.error(e);
   }
+}
+
+// ── Generate JS Code ─────────────────────────────────────────────────────────
+
+function generateCode(cfg) {
+  const s = (v) => JSON.stringify(v);
+  const lines = [];
+  lines.push(`import init, { WasmReceiptBuilder } from 'thermoprint';`);
+  lines.push(`await init();`);
+  lines.push(``);
+  lines.push(`let b = new WasmReceiptBuilder(${s(cfg.width)});`);
+  lines.push(`b = b.currency(${s(cfg.currency)});`);
+  if (cfg.lang !== 'fr') lines.push(`b = b.language(${s(cfg.lang)});`);
+  lines.push(`b = b.init();`);
+  lines.push(``);
+  lines.push(`// Header`);
+  if (cfg.headerAlign !== 'center') lines.push(`b = b.align_${cfg.headerAlign}();`);
+  else lines.push(`b = b.align_center();`);
+  lines.push(`b = b.bold(true).double_size(true);`);
+  lines.push(`b = b.text_line(${s(cfg.shopName)});`);
+  lines.push(`b = b.bold(false).normal_size();`);
+  if (cfg.shopPhone) lines.push(`b = b.text_line(${s(cfg.shopPhone)});`);
+  if (cfg.shopAddress) lines.push(`b = b.text_line(${s(cfg.shopAddress)});`);
+
+  if (cfg.optDate || cfg.optRecNo) {
+    lines.push(`b = b.align_left();`);
+    lines.push(`b = b.divider("-");`);
+    if (cfg.optDate) lines.push(`b = b.text_line(new Date().toLocaleString());`);
+    if (cfg.optRecNo) lines.push(`b = b.text_line("#${cfg.receiptNo}");`);
+  }
+
+  lines.push(`b = b.align_left();`);
+  lines.push(`b = b.divider("=");`);
+  lines.push(``);
+
+  lines.push(`// Items`);
+  for (const it of cfg.items) {
+    const disc = it.discount > 0 ? s(String(Math.round(it.discount))) : 'undefined';
+    lines.push(`b = b.item(${s(it.name)}, ${it.qty}, ${s(String(Math.round(it.price)))}, ${disc});`);
+  }
+  lines.push(``);
+
+  if (cfg.customLines.length > 0) {
+    lines.push(`// Custom lines`);
+    for (const cl of cfg.customLines) {
+      if (!cl.text) continue;
+      if (cl.align !== 'left') lines.push(`b = b.align_${cl.align}();`);
+      lines.push(`b = b.text_line(${s(cl.text)});`);
+      if (cl.align !== 'left') lines.push(`b = b.align_left();`);
+    }
+    lines.push(``);
+  }
+
+  lines.push(`// Totals`);
+  lines.push(`b = b.divider("-");`);
+  lines.push(`b = b.subtotal_ht(${s(String(Math.round(cfg.subtotal)))});`);
+
+  for (const tax of cfg.taxes) {
+    if (tax.amount > 0) {
+      lines.push(`b = b.add_tax(${s(tax.label)}, ${s(String(tax.amount))}, ${tax.included});`);
+    }
+  }
+
+  lines.push(`b = b.total(${s(String(Math.round(cfg.total)))});`);
+
+  if (cfg.received > 0) {
+    lines.push(`b = b.received(${s(String(cfg.received))});`);
+    const ch = cfg.received - Math.round(cfg.total);
+    if (ch > 0) lines.push(`b = b.change(${s(String(ch))});`);
+  }
+
+  lines.push(`b = b.divider("=");`);
+  lines.push(``);
+
+  lines.push(`// Footer`);
+  if (cfg.optBarcode && cfg.orderRef) lines.push(`b = b.barcode_code128(${s(cfg.orderRef)});`);
+  if (cfg.optQr && cfg.qrData) lines.push(`b = b.qr_code(${s(cfg.qrData)}, 6);`);
+  if (cfg.servedBy) lines.push(`b = b.served_by(${s(cfg.servedBy)});`);
+  if (cfg.optThanks) lines.push(`b = b.thank_you(${s(cfg.shopName)});`);
+  if (cfg.optCut) { lines.push(`b = b.feed(3);`); lines.push(`b = b.cut();`); }
+
+  lines.push(``);
+  lines.push(`const bytes = b.build(); // Uint8Array — send to printer`);
+
+  return lines.join('\n');
 }
 
 // ── Render receipt as text preview ───────────────────────────────────────────
@@ -236,39 +433,26 @@ function renderPreview(bytes) {
   for (let i = 0; i < bytes.length; i++) {
     const b = bytes[i];
 
-    // Skip ESC sequences (ESC + command byte, optionally + param)
     if (b === 0x1B) {
       i++;
       const cmd = bytes[i];
-      if (cmd === 0x64 || cmd === 0x74 || cmd === 0x21) i++; // ESC d n, ESC t n, ESC ! n
+      if (cmd === 0x64 || cmd === 0x74 || cmd === 0x21) i++;
       continue;
     }
-    // Skip GS sequences (barcodes, QR, cut, font size, etc.)
     if (b === 0x1D) {
       i++;
       const cmd = bytes[i];
-      if (cmd === 0x56) { // GS V — cut
-        i++;
-        if (bytes[i] === 66) i++; // GS V 66 n
-      }
-      else if (cmd === 0x21) i++;     // GS ! n — font size
-      else if (cmd === 0x77) i++;     // GS w n — barcode width
-      else if (cmd === 0x68) i++;     // GS h n — barcode height
-      else if (cmd === 0x48) i++;     // GS H n — HRI pos
-      else if (cmd === 0x66) i++;     // GS f n — HRI font
-      else if (cmd === 0x6B) {        // GS k — barcode data
-        i++;                          // skip type
-        const len = bytes[i]; i++;    // length byte
-        i += len - 1;                 // skip data
-      } else if (cmd === 0x28) {      // GS ( k — QR / 2D
-        i++;                          // skip 'k'
-        const pL = bytes[i]; i++;
-        const pH = bytes[i]; i++;
-        i += (pH << 8 | pL) - 1;
-      }
+      if (cmd === 0x56) { i++; if (bytes[i] === 66) i++; }
+      else if (cmd === 0x21) i++;
+      else if (cmd === 0x77) i++;
+      else if (cmd === 0x68) i++;
+      else if (cmd === 0x48) i++;
+      else if (cmd === 0x66) i++;
+      else if (cmd === 0x6B) { i++; const len = bytes[i]; i++; i += len - 1; }
+      else if (cmd === 0x28) { i++; const pL = bytes[i]; i++; const pH = bytes[i]; i++; i += (pH << 8 | pL) - 1; }
       continue;
     }
-    if (b === 0x0C) continue;         // FF
+    if (b === 0x0C) continue;
     if (b === 0x0A) { lines.push(line); line = ''; continue; }
     if (b >= 0x20 && b < 0x80) line += String.fromCharCode(b);
     else if (b > 0x80) line += cp858Char(b);
@@ -277,34 +461,40 @@ function renderPreview(bytes) {
 
   const el    = document.getElementById('receipt-text');
   const empty = document.getElementById('empty-state');
-  el.textContent    = lines.join('\n');
-  el.style.display  = 'block';
+  el.textContent      = lines.join('\n');
+  el.style.display    = 'block';
   empty.style.display = 'none';
-  el.style.fontSize = cols <= 32 ? '11px' : '12px';
+  el.style.fontSize   = cols <= 32 ? '11px' : '12px';
 }
 
-// Minimal CP858 high-byte decode for preview
 function cp858Char(b) {
   const map = {
-    0x82:'e', 0x83:'a', 0x84:'a', 0x85:'a', 0x87:'c',
-    0x88:'e', 0x89:'e', 0x8A:'e', 0x8B:'i', 0x8C:'i',
-    0x81:'u', 0x90:'E', 0x93:'o', 0x94:'o', 0x96:'u',
-    0x97:'u', 0xD5:'E', 0x80:'C', 0xA4:'n', 0xA5:'N',
-    0xB7:'A', 0xB6:'A', 0xD4:'E', 0xD2:'E', 0xD7:'I',
-    0xE4:'O', 0xEB:'U', 0xEA:'U',
+    0x82:'e',0x83:'a',0x84:'a',0x85:'a',0x87:'c',
+    0x88:'e',0x89:'e',0x8A:'e',0x8B:'i',0x8C:'i',
+    0x81:'u',0x90:'E',0x93:'o',0x94:'o',0x96:'u',
+    0x97:'u',0xD5:'E',0x80:'C',0xA4:'n',0xA5:'N',
+    0xB7:'A',0xB6:'A',0xD4:'E',0xD2:'E',0xD7:'I',
+    0xE4:'O',0xEB:'U',0xEA:'U',
   };
   return map[b] ?? '?';
 }
 
-// ── Stats bar ─────────────────────────────────────────────────────────────────
+// ── Render code output ───────────────────────────────────────────────────────
 
-function updateStats(bytes, items, total, currency) {
-  document.getElementById('stat-bytes').textContent = `${bytes.length} bytes`;
-  document.getElementById('stat-items').textContent = `${items.length} item${items.length !== 1 ? 's' : ''}`;
-  document.getElementById('stat-total').textContent = `Total: ${total.toLocaleString()} ${currency}`;
+function renderCode(code) {
+  document.getElementById('code-output').textContent = code;
 }
 
-// ── Hex dump ──────────────────────────────────────────────────────────────────
+// ── Stats bar ────────────────────────────────────────────────────────────────
+
+function updateStats(bytes, items, taxes, total, currency) {
+  document.getElementById('stat-bytes').textContent = `${bytes.length} bytes`;
+  document.getElementById('stat-items').textContent = `${items.length} item${items.length !== 1 ? 's' : ''}`;
+  document.getElementById('stat-taxes').textContent = `${taxes.length} tax${taxes.length !== 1 ? 'es' : ''}`;
+  document.getElementById('stat-total').textContent = `Total: ${Math.round(total).toLocaleString()} ${currency}`;
+}
+
+// ── Hex dump ─────────────────────────────────────────────────────────────────
 
 function renderHex(bytes) {
   const parts = [];
@@ -317,7 +507,7 @@ function renderHex(bytes) {
   document.getElementById('hex-dump').textContent = parts.join('\n');
 }
 
-// ── Download ──────────────────────────────────────────────────────────────────
+// ── Toolbar buttons ──────────────────────────────────────────────────────────
 
 document.getElementById('download-btn').addEventListener('click', () => {
   if (!lastBytes) return;
@@ -331,8 +521,6 @@ document.getElementById('download-btn').addEventListener('click', () => {
   showToast('Downloaded receipt.bin');
 });
 
-// ── Copy hex ──────────────────────────────────────────────────────────────────
-
 document.getElementById('copy-hex-btn').addEventListener('click', async () => {
   if (!lastBytes) return;
   const hex = [...lastBytes].map(b => b.toString(16).padStart(2, '0')).join(' ');
@@ -340,39 +528,68 @@ document.getElementById('copy-hex-btn').addEventListener('click', async () => {
   showToast('Hex copied to clipboard');
 });
 
-// ── Toggle hex panel ──────────────────────────────────────────────────────────
-
-document.getElementById('toggle-hex').addEventListener('click', () => {
-  const dump   = document.getElementById('hex-dump');
-  const btn    = document.getElementById('toggle-hex');
-  const hidden = dump.style.display === 'none';
-  dump.style.display = hidden ? 'block' : 'none';
-  btn.textContent    = hidden ? 'Hide' : 'Show';
+document.getElementById('copy-code-btn').addEventListener('click', async () => {
+  if (!lastCode) return;
+  await navigator.clipboard.writeText(lastCode);
+  showToast('JS code copied to clipboard');
 });
 
-// ── Add item / tax buttons ────────────────────────────────────────────────────
+// ── Tabs ─────────────────────────────────────────────────────────────────────
+
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+  });
+});
+
+// ── Alignment button delegation ──────────────────────────────────────────────
+
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('.align-btn');
+  if (!btn) return;
+  const group = btn.closest('.align-btns');
+  if (!group) return;
+  const target = group.dataset.target;
+  group.querySelectorAll('.align-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  alignState[target] = btn.dataset.align;
+  buildReceipt();
+});
+
+// ── QR checkbox toggle ───────────────────────────────────────────────────────
+
+document.getElementById('opt-qr').addEventListener('change', (e) => {
+  document.getElementById('qr-data-field').style.display = e.target.checked ? 'block' : 'none';
+  buildReceipt();
+});
+
+// ── Add buttons ──────────────────────────────────────────────────────────────
 
 document.getElementById('add-item').addEventListener('click', () => { addItem(); buildReceipt(); });
-document.getElementById('add-tax').addEventListener('click',  () => { addTax();  buildReceipt(); });
+document.getElementById('add-tax').addEventListener('click',  () => { addTax('Tax', 5, false); buildReceipt(); });
+document.getElementById('add-custom-line').addEventListener('click', () => { addCustomLine(); buildReceipt(); });
 
-// ── Form change listeners ─────────────────────────────────────────────────────
+// ── Form change listeners ────────────────────────────────────────────────────
 
 ['shop-name','shop-phone','shop-address','currency','paper-width','language',
- 'received','order-ref','served-by',
- 'opt-barcode','opt-thankyou','opt-cut'].forEach(id => {
+ 'received','order-ref','served-by','qr-data',
+ 'opt-date','opt-receipt-no','opt-barcode','opt-qr','opt-thankyou','opt-cut'].forEach(id => {
   const el = document.getElementById(id);
   el?.addEventListener('change', buildReceipt);
   el?.addEventListener('input',  buildReceipt);
 });
 
-// ── Form submit ───────────────────────────────────────────────────────────────
+// ── Form submit ──────────────────────────────────────────────────────────────
 
 document.getElementById('receipt-form').addEventListener('submit', e => {
   e.preventDefault();
   buildReceipt();
 });
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function showToast(msg) {
   const t = document.getElementById('toast');
@@ -387,9 +604,9 @@ function showError(msg) {
   el.textContent      = msg;
   el.style.display    = 'block';
   empty.style.display = 'none';
-  showToast('Error — check console');
+  showToast('Error — see console');
 }
 
-// ── Start ─────────────────────────────────────────────────────────────────────
+// ── Start ────────────────────────────────────────────────────────────────────
 
 boot();

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>thermoprint — Web Demo</title>
+  <title>thermoprint — Receipt Builder</title>
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -27,13 +27,26 @@
         <p class="subtitle">ESC/POS Receipt Builder</p>
       </div>
 
-      <form id="receipt-form">
+      <form id="receipt-form" autocomplete="off">
         <!-- Shop -->
         <section class="form-section">
-          <h3 class="section-title">Shop</h3>
+          <h3 class="section-title">Shop Info</h3>
           <div class="field">
             <label>Shop Name</label>
-            <input type="text" id="shop-name" value="MA BOUTIQUE" />
+            <div class="input-with-align">
+              <input type="text" id="shop-name" value="MA BOUTIQUE" />
+              <div class="align-btns" data-target="header-align">
+                <button type="button" class="align-btn active" data-align="center" title="Center">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="18" y1="18" x2="6" y2="18"/></svg>
+                </button>
+                <button type="button" class="align-btn" data-align="left" title="Left">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+                </button>
+                <button type="button" class="align-btn" data-align="right" title="Right">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="field">
             <label>Phone</label>
@@ -41,15 +54,15 @@
           </div>
           <div class="field">
             <label>Address</label>
-            <input type="text" id="shop-address" value="Dakar, Sénégal" />
+            <input type="text" id="shop-address" value="Dakar, Senegal" />
           </div>
           <div class="field-row">
             <div class="field">
-              <label for="currency">Currency</label>
+              <label>Currency</label>
               <input type="text" id="currency" value="FCFA" maxlength="8" />
             </div>
             <div class="field">
-              <label for="paper-width">Paper Width</label>
+              <label>Paper Width</label>
               <select id="paper-width">
                 <option value="58mm">58 mm</option>
                 <option value="80mm" selected>80 mm</option>
@@ -58,12 +71,12 @@
             </div>
           </div>
           <div class="field">
-            <label for="language">Language</label>
+            <label>Language</label>
             <select id="language">
-              <option value="fr" selected>Français</option>
+              <option value="fr" selected>Francais</option>
               <option value="en">English</option>
-              <option value="es">Español</option>
-              <option value="pt">Português</option>
+              <option value="es">Espanol</option>
+              <option value="pt">Portugues</option>
               <option value="ar">Arabic (Latin)</option>
               <option value="wo">Wolof</option>
             </select>
@@ -74,18 +87,29 @@
         <section class="form-section">
           <h3 class="section-title">
             Items
-            <button type="button" class="btn-add" id="add-item">+ Add</button>
+            <button type="button" class="btn-add" id="add-item">+ Add Item</button>
           </h3>
           <div id="items-list"></div>
         </section>
 
-        <!-- Tax -->
+        <!-- Taxes -->
         <section class="form-section">
           <h3 class="section-title">
             Taxes
-            <button type="button" class="btn-add" id="add-tax">+ Add</button>
+            <button type="button" class="btn-add" id="add-tax">+ Add Tax</button>
           </h3>
+          <p class="section-hint">Tax amounts are <strong>auto-calculated</strong> from subtotal.</p>
           <div id="taxes-list"></div>
+        </section>
+
+        <!-- Custom Text Lines -->
+        <section class="form-section">
+          <h3 class="section-title">
+            Custom Lines
+            <button type="button" class="btn-add" id="add-custom-line">+ Add</button>
+          </h3>
+          <p class="section-hint">Extra text lines inserted before totals.</p>
+          <div id="custom-lines-list"></div>
         </section>
 
         <!-- Payment -->
@@ -112,7 +136,16 @@
           <h3 class="section-title">Options</h3>
           <div class="checkboxes">
             <label class="checkbox-label">
-              <input type="checkbox" id="opt-barcode" checked /> Print barcode
+              <input type="checkbox" id="opt-date" checked /> Print date &amp; time
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="opt-receipt-no" checked /> Receipt number
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="opt-barcode" checked /> Barcode (Code128)
+            </label>
+            <label class="checkbox-label">
+              <input type="checkbox" id="opt-qr" /> QR Code
             </label>
             <label class="checkbox-label">
               <input type="checkbox" id="opt-thankyou" checked /> Thank-you footer
@@ -120,6 +153,24 @@
             <label class="checkbox-label">
               <input type="checkbox" id="opt-cut" checked /> Paper cut
             </label>
+          </div>
+          <div class="field" id="qr-data-field" style="display:none;margin-top:8px">
+            <label>QR Data</label>
+            <input type="text" id="qr-data" value="https://thermoprint.dev" placeholder="URL or text" />
+          </div>
+          <div class="field" style="margin-top:8px">
+            <label>Footer Alignment</label>
+            <div class="align-btns" data-target="footer-align">
+              <button type="button" class="align-btn active" data-align="center" title="Center">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="18" y1="18" x2="6" y2="18"/></svg>
+              </button>
+              <button type="button" class="align-btn" data-align="left" title="Left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="17" y1="18" x2="3" y2="18"/></svg>
+              </button>
+              <button type="button" class="align-btn" data-align="right" title="Right">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="7" y2="18"/></svg>
+              </button>
+            </div>
           </div>
         </section>
 
@@ -129,58 +180,83 @@
       </form>
     </aside>
 
-    <!-- ── Main: Preview + Download ── -->
+    <!-- ── Main: Preview + Output ── -->
     <main class="preview-pane">
       <div class="preview-toolbar">
         <span class="preview-title">Receipt Preview</span>
         <div class="toolbar-actions">
+          <button class="btn-icon" id="copy-code-btn" disabled title="Copy JS code">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+            </svg>
+            Copy JS Code
+          </button>
           <button class="btn-icon" id="download-btn" disabled title="Download .bin">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
               <polyline points="7 10 12 15 17 10"/>
               <line x1="12" y1="15" x2="12" y2="3"/>
             </svg>
             Download .bin
           </button>
-          <button class="btn-icon" id="copy-hex-btn" disabled title="Copy hex">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <button class="btn-icon" id="copy-hex-btn" disabled title="Copy hex bytes">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
               <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
             </svg>
-            Copy hex
+            Copy Hex
           </button>
         </div>
       </div>
 
-      <div class="receipt-wrapper">
-        <div class="receipt-paper" id="receipt-paper">
-          <div class="empty-state" id="empty-state">
-            <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <rect x="8" y="14" width="32" height="24" rx="4" fill="#1e293b"/>
-              <rect x="8" y="14" width="32" height="8" rx="4" fill="#e94560" opacity="0.7"/>
-              <rect x="14" y="25" width="20" height="2" rx="1" fill="#334155"/>
-              <rect x="16" y="29" width="16" height="12" rx="2" fill="#f1f5f9" opacity="0.9"/>
-            </svg>
-            <p>Fill in the form and click<br/><strong>Build Receipt</strong></p>
+      <!-- Tabs: Preview | JS Code | Hex -->
+      <div class="output-tabs">
+        <button class="tab-btn active" data-tab="preview">Preview</button>
+        <button class="tab-btn" data-tab="code">JS Code</button>
+        <button class="tab-btn" data-tab="hex">Hex Dump</button>
+      </div>
+
+      <!-- Tab: Preview -->
+      <div class="tab-content active" id="tab-preview">
+        <div class="receipt-wrapper">
+          <div class="receipt-paper" id="receipt-paper">
+            <div class="empty-state" id="empty-state">
+              <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <rect x="8" y="14" width="32" height="24" rx="4" fill="#1e293b"/>
+                <rect x="8" y="14" width="32" height="8" rx="4" fill="#e94560" opacity="0.7"/>
+                <rect x="14" y="25" width="20" height="2" rx="1" fill="#334155"/>
+                <rect x="16" y="29" width="16" height="12" rx="2" fill="#f1f5f9" opacity="0.9"/>
+              </svg>
+              <p>Fill in the form and click<br/><strong>Build Receipt</strong></p>
+            </div>
+            <pre class="receipt-text" id="receipt-text" style="display:none"></pre>
           </div>
-          <pre class="receipt-text" id="receipt-text" style="display:none"></pre>
         </div>
       </div>
 
+      <!-- Tab: JS Code -->
+      <div class="tab-content" id="tab-code">
+        <div class="code-wrapper">
+          <pre class="code-output" id="code-output">// Build your receipt to see the JS code here</pre>
+        </div>
+      </div>
+
+      <!-- Tab: Hex Dump -->
+      <div class="tab-content" id="tab-hex">
+        <div class="hex-wrapper">
+          <pre class="hex-dump" id="hex-dump"></pre>
+        </div>
+      </div>
+
+      <!-- Stats bar -->
       <div class="stats-bar" id="stats-bar" style="display:none">
         <span id="stat-bytes">0 bytes</span>
-        <span class="stat-sep">·</span>
+        <span class="stat-sep">|</span>
         <span id="stat-items">0 items</span>
-        <span class="stat-sep">·</span>
+        <span class="stat-sep">|</span>
+        <span id="stat-taxes">0 taxes</span>
+        <span class="stat-sep">|</span>
         <span id="stat-total">Total: 0 FCFA</span>
-      </div>
-
-      <div class="hex-panel" id="hex-panel" style="display:none">
-        <div class="hex-header">
-          <span>Raw ESC/POS bytes (hex)</span>
-          <button class="btn-text" id="toggle-hex">Hide</button>
-        </div>
-        <pre class="hex-dump" id="hex-dump"></pre>
       </div>
     </main>
   </div>
