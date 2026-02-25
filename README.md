@@ -1,4 +1,6 @@
-# thermoprint
+<p align="center">
+  <img src="assets/logo.svg" alt="thermoprint" width="420"/>
+</p>
 
 [![Crates.io](https://img.shields.io/crates/v/thermoprint.svg)](https://crates.io/crates/thermoprint)
 [![docs.rs](https://docs.rs/thermoprint/badge.svg)](https://docs.rs/thermoprint)

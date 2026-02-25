@@ -513,6 +513,7 @@ impl ReceiptBuilder {
 /// All `Decimal` amounts are accepted as numeric strings (e.g. `"15000"` or
 /// `"149.99"`) to avoid JavaScript's floating-point imprecision.
 #[cfg(all(feature = "wasm", target_arch = "wasm32"))]
+#[allow(missing_docs)]
 pub mod wasm {
     use super::*;
     use std::str::FromStr;
