@@ -42,7 +42,7 @@ pub enum DitherMethod {
 /// - `width`: image width in pixels.
 /// - `height`: image height in pixels.
 /// - `max_width_px`: maximum printable width in pixels (e.g. 384 for 80mm).
-///    Images wider than this are scaled down proportionally.
+///   Images wider than this are scaled down proportionally.
 /// - `method`: dithering algorithm to use.
 ///
 /// Returns a `Vec<u8>` containing a `GS v 0` raster command ready to push
@@ -54,7 +54,11 @@ pub fn dither_rgba(
     max_width_px: u32,
     method: DitherMethod,
 ) -> Vec<u8> {
-    assert_eq!(rgba.len(), (width * height * 4) as usize, "RGBA data length mismatch");
+    assert_eq!(
+        rgba.len(),
+        (width * height * 4) as usize,
+        "RGBA data length mismatch"
+    );
 
     // Convert RGBA to grayscale float buffer
     let (gray, w, h) = to_grayscale_resized(rgba, width, height, max_width_px);
@@ -72,25 +76,21 @@ pub fn dither_rgba(
 /// Convert RGBA pixel data to ESC/POS raster bytes using simple threshold.
 ///
 /// Convenience wrapper for `dither_rgba` with `DitherMethod::Threshold`.
-pub fn threshold_rgba(
-    rgba: &[u8],
-    width: u32,
-    height: u32,
-    max_width_px: u32,
-) -> Vec<u8> {
+pub fn threshold_rgba(rgba: &[u8], width: u32, height: u32, max_width_px: u32) -> Vec<u8> {
     dither_rgba(rgba, width, height, max_width_px, DitherMethod::Threshold)
 }
 
 /// Convert RGBA pixel data to ESC/POS raster bytes using Floyd-Steinberg.
 ///
 /// Convenience wrapper for `dither_rgba` with `DitherMethod::FloydSteinberg`.
-pub fn floyd_steinberg_rgba(
-    rgba: &[u8],
-    width: u32,
-    height: u32,
-    max_width_px: u32,
-) -> Vec<u8> {
-    dither_rgba(rgba, width, height, max_width_px, DitherMethod::FloydSteinberg)
+pub fn floyd_steinberg_rgba(rgba: &[u8], width: u32, height: u32, max_width_px: u32) -> Vec<u8> {
+    dither_rgba(
+        rgba,
+        width,
+        height,
+        max_width_px,
+        DitherMethod::FloydSteinberg,
+    )
 }
 
 // ── Internal helpers ─────────────────────────────────────────────────────────
@@ -143,9 +143,9 @@ fn to_grayscale_resized(
             let p11 = gray[(y1 * width + x1) as usize];
 
             let val = p00 * (1.0 - fx) * (1.0 - fy)
-                    + p10 * fx * (1.0 - fy)
-                    + p01 * (1.0 - fx) * fy
-                    + p11 * fx * fy;
+                + p10 * fx * (1.0 - fy)
+                + p01 * (1.0 - fx) * fy
+                + p11 * fx * fy;
 
             resized.push(val);
         }
@@ -199,7 +199,7 @@ fn floyd_steinberg(gray: &[f32], width: u32, height: u32) -> Vec<bool> {
 
 /// Pack 1-bit monochrome data into a GS v 0 raster command.
 fn pack_raster(mono: &[bool], width: u32, height: u32) -> Vec<u8> {
-    let bytes_per_line = ((width + 7) / 8) as usize;
+    let bytes_per_line = width.div_ceil(8) as usize;
     let mut raster = Vec::with_capacity(bytes_per_line * height as usize);
 
     for y in 0..height {
@@ -233,7 +233,9 @@ mod tests {
 
     #[test]
     fn solid_white_4x1() {
-        let rgba = vec![255u8, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255];
+        let rgba = vec![
+            255u8, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
+        ];
         let result = dither_rgba(&rgba, 4, 1, 384, DitherMethod::Threshold);
         assert_eq!(result[8], 0x00);
     }
@@ -241,7 +243,9 @@ mod tests {
     #[test]
     fn floyd_steinberg_produces_output() {
         // 8x2 mid-gray image
-        let rgba: Vec<u8> = (0..8 * 2).flat_map(|_| vec![128u8, 128, 128, 255]).collect();
+        let rgba: Vec<u8> = (0..8 * 2)
+            .flat_map(|_| vec![128u8, 128, 128, 255])
+            .collect();
         let result = dither_rgba(&rgba, 8, 2, 384, DitherMethod::FloydSteinberg);
         assert!(!result.is_empty());
         // Should have header + 2 rows of 1 byte each

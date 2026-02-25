@@ -59,9 +59,15 @@ pub struct ReceiptTemplate {
     pub elements: Vec<Element>,
 }
 
-fn default_width() -> String { "80mm".to_owned() }
-fn default_currency() -> String { "FCFA".to_owned() }
-fn default_language() -> String { "fr".to_owned() }
+fn default_width() -> String {
+    "80mm".to_owned()
+}
+fn default_currency() -> String {
+    "FCFA".to_owned()
+}
+fn default_language() -> String {
+    "fr".to_owned()
+}
 
 /// A single element in a receipt template.
 ///
@@ -84,25 +90,16 @@ pub enum Element {
     },
 
     /// A single text line.
-    TextLine {
-        text: String,
-    },
+    TextLine { text: String },
 
     /// Centered text line.
-    Centered {
-        text: String,
-    },
+    Centered { text: String },
 
     /// Right-aligned text line.
-    Right {
-        text: String,
-    },
+    Right { text: String },
 
     /// Two-column row (label left, value right).
-    Row {
-        left: String,
-        right: String,
-    },
+    Row { left: String, right: String },
 
     /// Full-width divider.
     Divider {
@@ -199,24 +196,16 @@ pub enum Element {
     },
 
     /// Served by footer.
-    ServedBy {
-        name: String,
-    },
+    ServedBy { name: String },
 
     /// Thank you footer.
-    ThankYou {
-        shop_name: String,
-    },
+    ThankYou { shop_name: String },
 
     /// CODE128 barcode.
-    BarcodeCode128 {
-        value: String,
-    },
+    BarcodeCode128 { value: String },
 
     /// EAN-13 barcode.
-    BarcodeEan13 {
-        value: String,
-    },
+    BarcodeEan13 { value: String },
 
     /// QR code.
     QrCode {
@@ -244,10 +233,18 @@ pub enum Element {
     OpenCashDrawer,
 }
 
-fn default_divider_char() -> String { "-".to_owned() }
-fn default_true() -> bool { true }
-fn default_qr_size() -> u8 { 4 }
-fn default_feed() -> u8 { 3 }
+fn default_divider_char() -> String {
+    "-".to_owned()
+}
+fn default_true() -> bool {
+    true
+}
+fn default_qr_size() -> u8 {
+    4
+}
+fn default_feed() -> u8 {
+    3
+}
 
 /// Error type for template rendering.
 #[derive(Debug, thiserror::Error)]
@@ -338,29 +335,29 @@ fn parse_width(s: &str) -> Result<PrintWidth, TemplateError> {
     match s.to_lowercase().as_str() {
         "58mm" | "58" => Ok(PrintWidth::Mm58),
         "80mm" | "80" => Ok(PrintWidth::Mm80),
-        "a4"          => Ok(PrintWidth::A4),
-        _             => Err(TemplateError::UnknownWidth(s.to_owned())),
+        "a4" => Ok(PrintWidth::A4),
+        _ => Err(TemplateError::UnknownWidth(s.to_owned())),
     }
 }
 
 fn parse_language(s: &str) -> Result<Language, TemplateError> {
     match s.to_lowercase().as_str() {
-        "fr" | "french"     => Ok(Language::Fr),
-        "en" | "english"    => Ok(Language::En),
-        "es" | "spanish"    => Ok(Language::Es),
+        "fr" | "french" => Ok(Language::Fr),
+        "en" | "english" => Ok(Language::En),
+        "es" | "spanish" => Ok(Language::Es),
         "pt" | "portuguese" => Ok(Language::Pt),
-        "ar" | "arabic"     => Ok(Language::Ar),
-        "wo" | "wolof"      => Ok(Language::Wo),
-        _                   => Err(TemplateError::UnknownLanguage(s.to_owned())),
+        "ar" | "arabic" => Ok(Language::Ar),
+        "wo" | "wolof" => Ok(Language::Wo),
+        _ => Err(TemplateError::UnknownLanguage(s.to_owned())),
     }
 }
 
 fn parse_align(s: &str) -> Result<crate::types::Align, TemplateError> {
     match s.to_lowercase().as_str() {
-        "left"   => Ok(crate::types::Align::Left),
+        "left" => Ok(crate::types::Align::Left),
         "center" => Ok(crate::types::Align::Center),
-        "right"  => Ok(crate::types::Align::Right),
-        _        => Err(TemplateError::UnknownAlign(s.to_owned())),
+        "right" => Ok(crate::types::Align::Right),
+        _ => Err(TemplateError::UnknownAlign(s.to_owned())),
     }
 }
 
@@ -371,12 +368,15 @@ fn apply_element(
     let b = match element {
         Element::Init => builder.init(),
 
-        Element::ShopHeader { name, phone, address } =>
-            builder.shop_header(name, phone, address),
+        Element::ShopHeader {
+            name,
+            phone,
+            address,
+        } => builder.shop_header(name, phone, address),
 
         Element::TextLine { text } => builder.text_line(text),
         Element::Centered { text } => builder.centered(text),
-        Element::Right { text }    => builder.right(text),
+        Element::Right { text } => builder.right(text),
         Element::Row { left, right } => builder.row(left, right),
 
         Element::Divider { ch } => {
@@ -384,48 +384,58 @@ fn apply_element(
             builder.divider(c)
         }
 
-        Element::Blank      => builder.blank(),
+        Element::Blank => builder.blank(),
         Element::Bold { on } => builder.bold(*on),
-        Element::DoubleSize { on }   => builder.double_size(*on),
+        Element::DoubleSize { on } => builder.double_size(*on),
         Element::DoubleHeight { on } => builder.double_height(*on),
-        Element::NormalSize          => builder.normal_size(),
-        Element::Underline { on }    => builder.underline(*on),
+        Element::NormalSize => builder.normal_size(),
+        Element::Underline { on } => builder.underline(*on),
 
         Element::Align { value } => builder.align(parse_align(value)?),
 
-        Element::Item { name, qty, unit_price, discount } => {
+        Element::Item {
+            name,
+            qty,
+            unit_price,
+            discount,
+        } => {
             let price = parse_decimal(unit_price)?;
             let disc = discount.as_deref().map(parse_decimal).transpose()?;
             builder.item(name, *qty, price, disc)
         }
 
-        Element::Subtotal { amount } =>
-            builder.subtotal_ht(parse_decimal(amount)?),
+        Element::Subtotal { amount } => builder.subtotal_ht(parse_decimal(amount)?),
 
-        Element::Tax { label, amount, included } => {
+        Element::Tax {
+            label,
+            amount,
+            included,
+        } => {
             let entry = TaxEntry::new(label.clone(), parse_decimal(amount)?, *included);
             builder.taxes(&[entry])
         }
 
-        Element::Discount { amount, coupon_code } =>
-            builder.discount(parse_decimal(amount)?, coupon_code.as_deref()),
+        Element::Discount {
+            amount,
+            coupon_code,
+        } => builder.discount(parse_decimal(amount)?, coupon_code.as_deref()),
 
-        Element::Total { amount }    => builder.total(parse_decimal(amount)?),
+        Element::Total { amount } => builder.total(parse_decimal(amount)?),
         Element::Received { amount } => builder.received(parse_decimal(amount)?),
-        Element::Change { amount }   => builder.change(parse_decimal(amount)?),
+        Element::Change { amount } => builder.change(parse_decimal(amount)?),
 
-        Element::ServedBy { name }         => builder.served_by(name),
-        Element::ThankYou { shop_name }    => builder.thank_you(shop_name),
+        Element::ServedBy { name } => builder.served_by(name),
+        Element::ThankYou { shop_name } => builder.thank_you(shop_name),
 
-        Element::BarcodeCode128 { value }  => builder.barcode_code128(value),
-        Element::BarcodeEan13 { value }    => builder.barcode_ean13(value),
-        Element::QrCode { data, size }     => builder.qr_code(data, *size),
+        Element::BarcodeCode128 { value } => builder.barcode_code128(value),
+        Element::BarcodeEan13 { value } => builder.barcode_ean13(value),
+        Element::QrCode { data, size } => builder.qr_code(data, *size),
 
-        Element::Feed { lines }     => builder.feed(*lines),
-        Element::Cut                => builder.cut(),
-        Element::CutFull            => builder.cut_full(),
-        Element::FormFeed           => builder.form_feed(),
-        Element::OpenCashDrawer     => builder.open_cash_drawer(),
+        Element::Feed { lines } => builder.feed(*lines),
+        Element::Cut => builder.cut(),
+        Element::CutFull => builder.cut_full(),
+        Element::FormFeed => builder.form_feed(),
+        Element::OpenCashDrawer => builder.open_cash_drawer(),
     };
 
     Ok(b)

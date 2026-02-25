@@ -23,7 +23,7 @@ impl PrintWidth {
         match self {
             PrintWidth::Mm58 => 32,
             PrintWidth::Mm80 => 48,
-            PrintWidth::A4   => 90,
+            PrintWidth::A4 => 90,
         }
     }
 
@@ -38,7 +38,7 @@ impl PrintWidth {
         match self {
             PrintWidth::Mm58 => 256,
             PrintWidth::Mm80 => 384,
-            PrintWidth::A4   => 576,
+            PrintWidth::A4 => 576,
         }
     }
 }
@@ -69,6 +69,10 @@ pub struct TaxEntry {
 impl TaxEntry {
     /// Convenience constructor.
     pub fn new(label: impl Into<String>, amount: Decimal, included: bool) -> Self {
-        Self { label: label.into(), amount, included }
+        Self {
+            label: label.into(),
+            amount,
+            included,
+        }
     }
 }

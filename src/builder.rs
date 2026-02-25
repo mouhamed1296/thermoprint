@@ -1,8 +1,8 @@
-use rust_decimal::Decimal;
 use rust_decimal::prelude::Zero;
+use rust_decimal::Decimal;
 
 use crate::commands::{self, LF};
-use crate::encoding::{encode_cp858, truncate, two_col, center, right_align};
+use crate::encoding::{center, encode_cp858, right_align, truncate, two_col};
 use crate::error::ThermoprintError;
 use crate::i18n::{Language, ReceiptLabels, LABELS_FR};
 use crate::types::{Align, PrintWidth, TaxEntry};
@@ -36,10 +36,10 @@ fn fmt_amount(amount: Decimal, currency: &str) -> String {
 ///     .build();
 /// ```
 pub struct ReceiptBuilder {
-    data:     Vec<u8>,
-    width:    PrintWidth,
+    data: Vec<u8>,
+    width: PrintWidth,
     currency: String,
-    labels:   ReceiptLabels,
+    labels: ReceiptLabels,
 }
 
 impl ReceiptBuilder {
@@ -47,10 +47,10 @@ impl ReceiptBuilder {
     /// Currency symbol defaults to `"FCFA"` — change with [`currency`](Self::currency).
     pub fn new(width: PrintWidth) -> Self {
         Self {
-            data:     Vec::new(),
+            data: Vec::new(),
             width,
             currency: "FCFA".to_owned(),
-            labels:   LABELS_FR,
+            labels: LABELS_FR,
         }
     }
 
@@ -92,7 +92,9 @@ impl ReceiptBuilder {
 
     // ── Helpers ───────────────────────────────────────────────────────────────
 
-    fn cols(&self) -> usize { self.width.cols() }
+    fn cols(&self) -> usize {
+        self.width.cols()
+    }
 
     fn push(&mut self, bytes: &[u8]) {
         self.data.extend_from_slice(bytes);
@@ -138,37 +140,55 @@ impl ReceiptBuilder {
     /// Set text alignment (left, center, or right).
     pub fn align(mut self, a: Align) -> Self {
         match a {
-            Align::Left   => self.push(commands::align_left()),
+            Align::Left => self.push(commands::align_left()),
             Align::Center => self.push(commands::align_center()),
-            Align::Right  => self.push(commands::align_right()),
+            Align::Right => self.push(commands::align_right()),
         }
         self
     }
 
     /// Shorthand for left alignment.
-    pub fn align_left(self)   -> Self { self.align(Align::Left) }
+    pub fn align_left(self) -> Self {
+        self.align(Align::Left)
+    }
     /// Shorthand for center alignment.
-    pub fn align_center(self) -> Self { self.align(Align::Center) }
+    pub fn align_center(self) -> Self {
+        self.align(Align::Center)
+    }
     /// Shorthand for right alignment.
-    pub fn align_right(self)  -> Self { self.align(Align::Right) }
+    pub fn align_right(self) -> Self {
+        self.align(Align::Right)
+    }
 
     // ── Text style ────────────────────────────────────────────────────────────
 
     /// Toggle bold text.
     pub fn bold(mut self, on: bool) -> Self {
-        self.push(if on { commands::bold_on() } else { commands::bold_off() });
+        self.push(if on {
+            commands::bold_on()
+        } else {
+            commands::bold_off()
+        });
         self
     }
 
     /// Toggle double-width and double-height text.
     pub fn double_size(mut self, on: bool) -> Self {
-        self.push(if on { commands::double_size_on() } else { commands::normal_size() });
+        self.push(if on {
+            commands::double_size_on()
+        } else {
+            commands::normal_size()
+        });
         self
     }
 
     /// Toggle double-height text (normal width).
     pub fn double_height(mut self, on: bool) -> Self {
-        self.push(if on { commands::double_height_on() } else { commands::normal_size() });
+        self.push(if on {
+            commands::double_height_on()
+        } else {
+            commands::normal_size()
+        });
         self
     }
 
@@ -180,7 +200,11 @@ impl ReceiptBuilder {
 
     /// Toggle underline.
     pub fn underline(mut self, on: bool) -> Self {
-        self.push(if on { commands::underline_on() } else { commands::underline_off() });
+        self.push(if on {
+            commands::underline_on()
+        } else {
+            commands::underline_off()
+        });
         self
     }
 
@@ -345,17 +369,13 @@ impl ReceiptBuilder {
     // ── High-level receipt helpers ────────────────────────────────────────────
 
     /// Print a shop header block (name, phone, address) centred and bold.
-    pub fn shop_header(
-        self,
-        name: &str,
-        phone: &str,
-        address: &str,
-    ) -> Self {
-        self
-            .align_center()
-            .bold(true).double_size(true)
+    pub fn shop_header(self, name: &str, phone: &str, address: &str) -> Self {
+        self.align_center()
+            .bold(true)
+            .double_size(true)
             .text_line(name)
-            .bold(false).normal_size()
+            .bold(false)
+            .normal_size()
             .text_line(phone)
             .text_line(address)
             .align_left()
@@ -429,11 +449,13 @@ impl ReceiptBuilder {
 
     /// Print a discount line.
     pub fn discount(mut self, amount: Decimal, coupon_code: Option<&str>) -> Self {
-        if amount <= Decimal::zero() { return self; }
+        if amount <= Decimal::zero() {
+            return self;
+        }
         let cols = self.cols();
         let label = match coupon_code {
             Some(code) => format!("{} ({})", self.labels.discount, code),
-            None       => self.labels.discount.to_owned(),
+            None => self.labels.discount.to_owned(),
         };
         let value = format!("-{}", self.fmt(amount));
         let row = two_col(&label, &value, cols);
@@ -449,7 +471,8 @@ impl ReceiptBuilder {
         let cols = self.cols();
 
         // Compute non-included total for the summary line
-        let additional: Decimal = entries.iter()
+        let additional: Decimal = entries
+            .iter()
             .filter(|t| !t.included)
             .map(|t| t.amount)
             .sum();
@@ -459,7 +482,9 @@ impl ReceiptBuilder {
         self.push_text_line(tax_details_label);
 
         for entry in entries {
-            if entry.amount <= Decimal::zero() { continue; }
+            if entry.amount <= Decimal::zero() {
+                continue;
+            }
             let label = if entry.included {
                 format!("  {} ({})", entry.label, tax_included_label)
             } else {
@@ -477,7 +502,11 @@ impl ReceiptBuilder {
         if additional > Decimal::zero() {
             let sep = "-".repeat(cols.saturating_sub(2));
             self.push_text_line(&format!("  {}", sep));
-            let row = two_col(&format!("  {}", self.labels.additional_taxes), &format!("+ {}", self.fmt(additional)), cols);
+            let row = two_col(
+                &format!("  {}", self.labels.additional_taxes),
+                &format!("+ {}", self.fmt(additional)),
+                cols,
+            );
             self.push_text_line(&row);
         }
 
@@ -486,9 +515,9 @@ impl ReceiptBuilder {
 
     /// Print the grand total line (bold, double height).
     pub fn total(mut self, amount: Decimal) -> Self {
-        let cols  = self.cols();
+        let cols = self.cols();
         let value = self.fmt(amount);
-        let row   = two_col(self.labels.total, &value, cols);
+        let row = two_col(self.labels.total, &value, cols);
         self = self.bold(true).double_height(true);
         self.push_text_line(&row);
         self = self.normal_size().bold(false);
@@ -497,20 +526,24 @@ impl ReceiptBuilder {
 
     /// Print the amount received by the customer.
     pub fn received(mut self, amount: Decimal) -> Self {
-        if amount <= Decimal::zero() { return self; }
-        let cols  = self.cols();
+        if amount <= Decimal::zero() {
+            return self;
+        }
+        let cols = self.cols();
         let value = self.fmt(amount);
-        let row   = two_col(self.labels.received, &value, cols);
+        let row = two_col(self.labels.received, &value, cols);
         self.push_text_line(&row);
         self
     }
 
     /// Print the change to return to the customer.
     pub fn change(mut self, amount: Decimal) -> Self {
-        if amount <= Decimal::zero() { return self; }
-        let cols  = self.cols();
+        if amount <= Decimal::zero() {
+            return self;
+        }
+        let cols = self.cols();
         let value = self.fmt(amount);
-        let row   = two_col(self.labels.change, &value, cols);
+        let row = two_col(self.labels.change, &value, cols);
         self.push_text_line(&row);
         self
     }
@@ -525,8 +558,7 @@ impl ReceiptBuilder {
     pub fn thank_you(self, shop_name: &str) -> Self {
         let ty = self.labels.thank_you;
         let see_you = format!("{} {}", self.labels.see_you_at, shop_name);
-        self
-            .align_center()
+        self.align_center()
             .text_line(ty)
             .text_line(&see_you)
             .align_left()
@@ -543,14 +575,15 @@ impl ReceiptBuilder {
 #[allow(missing_docs)]
 pub mod wasm {
     use super::*;
+    use js_sys::Uint8Array;
     use std::str::FromStr;
     use wasm_bindgen::prelude::*;
-    use js_sys::Uint8Array;
 
     fn parse_decimal(s: &str) -> Result<Decimal, JsValue> {
         Decimal::from_str(s).map_err(|_| {
             JsValue::from_str(&format!(
-                "thermoprint: invalid decimal '{}'. Use a numeric string e.g. \"15000\"", s
+                "thermoprint: invalid decimal '{}'. Use a numeric string e.g. \"15000\"",
+                s
             ))
         })
     }
@@ -569,79 +602,181 @@ pub mod wasm {
             let pw = match width.to_lowercase().as_str() {
                 "58mm" | "58" => PrintWidth::Mm58,
                 "80mm" | "80" => PrintWidth::Mm80,
-                "a4"          => PrintWidth::A4,
-                other => return Err(JsValue::from_str(
-                    &format!("thermoprint: unknown width '{}'. Use '58mm', '80mm', or 'a4'", other)
-                )),
+                "a4" => PrintWidth::A4,
+                other => {
+                    return Err(JsValue::from_str(&format!(
+                        "thermoprint: unknown width '{}'. Use '58mm', '80mm', or 'a4'",
+                        other
+                    )))
+                }
             };
-            Ok(WasmReceiptBuilder { inner: ReceiptBuilder::new(pw) })
+            Ok(WasmReceiptBuilder {
+                inner: ReceiptBuilder::new(pw),
+            })
         }
 
         /// Set currency symbol (default: `"FCFA"`).
         pub fn currency(self, symbol: &str) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.currency(symbol) }
+            WasmReceiptBuilder {
+                inner: self.inner.currency(symbol),
+            }
         }
 
         /// Set receipt language: `"fr"`, `"en"`, `"es"`, `"pt"`, `"ar"`, `"wo"`.
         pub fn language(self, lang: &str) -> Result<WasmReceiptBuilder, JsValue> {
             let l = match lang.to_lowercase().as_str() {
-                "fr" | "french"     => Language::Fr,
-                "en" | "english"    => Language::En,
-                "es" | "spanish"    => Language::Es,
+                "fr" | "french" => Language::Fr,
+                "en" | "english" => Language::En,
+                "es" | "spanish" => Language::Es,
                 "pt" | "portuguese" => Language::Pt,
-                "ar" | "arabic"     => Language::Ar,
-                "wo" | "wolof"      => Language::Wo,
-                other => return Err(JsValue::from_str(
-                    &format!("thermoprint: unknown language '{}'. Use 'fr', 'en', 'es', 'pt', 'ar', or 'wo'", other)
-                )),
+                "ar" | "arabic" => Language::Ar,
+                "wo" | "wolof" => Language::Wo,
+                other => {
+                    return Err(JsValue::from_str(&format!(
+                    "thermoprint: unknown language '{}'. Use 'fr', 'en', 'es', 'pt', 'ar', or 'wo'",
+                    other
+                )))
+                }
             };
-            Ok(WasmReceiptBuilder { inner: self.inner.language(l) })
+            Ok(WasmReceiptBuilder {
+                inner: self.inner.language(l),
+            })
         }
 
-        pub fn init(self)          -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.init() } }
-        pub fn blank(self)         -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.blank() } }
-        pub fn align_left(self)    -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.align_left() } }
-        pub fn align_center(self)  -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.align_center() } }
-        pub fn align_right(self)   -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.align_right() } }
-        pub fn bold(self, on: bool)-> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.bold(on) } }
-        pub fn double_size(self, on: bool) -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.double_size(on) } }
-        pub fn double_height(self, on: bool) -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.double_height(on) } }
-        pub fn normal_size(self)   -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.normal_size() } }
-        pub fn underline(self, on: bool) -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.underline(on) } }
-        pub fn text(self, s: &str) -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.text(s) } }
-        pub fn text_line(self, s: &str) -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.text_line(s) } }
-        pub fn centered(self, s: &str)  -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.centered(s) } }
-        pub fn right(self, s: &str)     -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.right(s) } }
+        pub fn init(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.init(),
+            }
+        }
+        pub fn blank(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.blank(),
+            }
+        }
+        pub fn align_left(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.align_left(),
+            }
+        }
+        pub fn align_center(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.align_center(),
+            }
+        }
+        pub fn align_right(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.align_right(),
+            }
+        }
+        pub fn bold(self, on: bool) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.bold(on),
+            }
+        }
+        pub fn double_size(self, on: bool) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.double_size(on),
+            }
+        }
+        pub fn double_height(self, on: bool) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.double_height(on),
+            }
+        }
+        pub fn normal_size(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.normal_size(),
+            }
+        }
+        pub fn underline(self, on: bool) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.underline(on),
+            }
+        }
+        pub fn text(self, s: &str) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.text(s),
+            }
+        }
+        pub fn text_line(self, s: &str) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.text_line(s),
+            }
+        }
+        pub fn centered(self, s: &str) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.centered(s),
+            }
+        }
+        pub fn right(self, s: &str) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.right(s),
+            }
+        }
         pub fn row(self, left: &str, right: &str) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.row(left, right) }
+            WasmReceiptBuilder {
+                inner: self.inner.row(left, right),
+            }
         }
         pub fn divider(self, ch: &str) -> WasmReceiptBuilder {
             let c = ch.chars().next().unwrap_or('-');
-            WasmReceiptBuilder { inner: self.inner.divider(c) }
+            WasmReceiptBuilder {
+                inner: self.inner.divider(c),
+            }
         }
-        pub fn feed(self, n: u8)   -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.feed(n) } }
-        pub fn cut(self)           -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.cut() } }
-        pub fn cut_full(self)      -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.cut_full() } }
-        pub fn form_feed(self)     -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.form_feed() } }
-        pub fn open_cash_drawer(self) -> WasmReceiptBuilder { WasmReceiptBuilder { inner: self.inner.open_cash_drawer() } }
+        pub fn feed(self, n: u8) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.feed(n),
+            }
+        }
+        pub fn cut(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.cut(),
+            }
+        }
+        pub fn cut_full(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.cut_full(),
+            }
+        }
+        pub fn form_feed(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.form_feed(),
+            }
+        }
+        pub fn open_cash_drawer(self) -> WasmReceiptBuilder {
+            WasmReceiptBuilder {
+                inner: self.inner.open_cash_drawer(),
+            }
+        }
 
         pub fn barcode_code128(self, value: &str) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.barcode_code128(value) }
+            WasmReceiptBuilder {
+                inner: self.inner.barcode_code128(value),
+            }
         }
         pub fn barcode_ean13(self, value: &str) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.barcode_ean13(value) }
+            WasmReceiptBuilder {
+                inner: self.inner.barcode_ean13(value),
+            }
         }
         pub fn qr_code(self, data: &str, size: u8) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.qr_code(data, size) }
+            WasmReceiptBuilder {
+                inner: self.inner.qr_code(data, size),
+            }
         }
 
         /// Append pre-rasterised logo bytes (pass a `Uint8Array` from your own image pipeline).
         pub fn logo_raw(self, bytes: &[u8]) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.logo_raw(bytes) }
+            WasmReceiptBuilder {
+                inner: self.inner.logo_raw(bytes),
+            }
         }
 
         pub fn shop_header(self, name: &str, phone: &str, address: &str) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.shop_header(name, phone, address) }
+            WasmReceiptBuilder {
+                inner: self.inner.shop_header(name, phone, address),
+            }
         }
 
         /// Add a line item. `unit_price` and `discount` are decimal strings.
@@ -653,52 +788,79 @@ pub mod wasm {
             discount: Option<String>,
         ) -> Result<WasmReceiptBuilder, JsValue> {
             let price = parse_decimal(unit_price)?;
-            let disc  = discount.as_deref().map(parse_decimal).transpose()?;
-            Ok(WasmReceiptBuilder { inner: self.inner.item(name, qty, price, disc) })
+            let disc = discount.as_deref().map(parse_decimal).transpose()?;
+            Ok(WasmReceiptBuilder {
+                inner: self.inner.item(name, qty, price, disc),
+            })
         }
 
         pub fn subtotal_ht(self, amount: &str) -> Result<WasmReceiptBuilder, JsValue> {
-            Ok(WasmReceiptBuilder { inner: self.inner.subtotal_ht(parse_decimal(amount)?) })
+            Ok(WasmReceiptBuilder {
+                inner: self.inner.subtotal_ht(parse_decimal(amount)?),
+            })
         }
 
         /// Add a single tax line. Call once per tax entry.
         /// `amount` is a decimal string; `included` is whether the tax is already in the item prices.
-        pub fn add_tax(self, label: &str, amount: &str, included: bool) -> Result<WasmReceiptBuilder, JsValue> {
+        pub fn add_tax(
+            self,
+            label: &str,
+            amount: &str,
+            included: bool,
+        ) -> Result<WasmReceiptBuilder, JsValue> {
             let amt = parse_decimal(amount)?;
             let entry = crate::types::TaxEntry::new(label, amt, included);
-            Ok(WasmReceiptBuilder { inner: self.inner.taxes(&[entry]) })
+            Ok(WasmReceiptBuilder {
+                inner: self.inner.taxes(&[entry]),
+            })
         }
 
-        pub fn discount(self, amount: &str, coupon_code: Option<String>) -> Result<WasmReceiptBuilder, JsValue> {
+        pub fn discount(
+            self,
+            amount: &str,
+            coupon_code: Option<String>,
+        ) -> Result<WasmReceiptBuilder, JsValue> {
             Ok(WasmReceiptBuilder {
-                inner: self.inner.discount(parse_decimal(amount)?, coupon_code.as_deref())
+                inner: self
+                    .inner
+                    .discount(parse_decimal(amount)?, coupon_code.as_deref()),
             })
         }
 
         pub fn total(self, amount: &str) -> Result<WasmReceiptBuilder, JsValue> {
-            Ok(WasmReceiptBuilder { inner: self.inner.total(parse_decimal(amount)?) })
+            Ok(WasmReceiptBuilder {
+                inner: self.inner.total(parse_decimal(amount)?),
+            })
         }
 
         pub fn received(self, amount: &str) -> Result<WasmReceiptBuilder, JsValue> {
-            Ok(WasmReceiptBuilder { inner: self.inner.received(parse_decimal(amount)?) })
+            Ok(WasmReceiptBuilder {
+                inner: self.inner.received(parse_decimal(amount)?),
+            })
         }
 
         pub fn change(self, amount: &str) -> Result<WasmReceiptBuilder, JsValue> {
-            Ok(WasmReceiptBuilder { inner: self.inner.change(parse_decimal(amount)?) })
+            Ok(WasmReceiptBuilder {
+                inner: self.inner.change(parse_decimal(amount)?),
+            })
         }
 
         pub fn served_by(self, name: &str) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.served_by(name) }
+            WasmReceiptBuilder {
+                inner: self.inner.served_by(name),
+            }
         }
 
         pub fn thank_you(self, shop_name: &str) -> WasmReceiptBuilder {
-            WasmReceiptBuilder { inner: self.inner.thank_you(shop_name) }
+            WasmReceiptBuilder {
+                inner: self.inner.thank_you(shop_name),
+            }
         }
 
         /// Finalise and return the ESC/POS bytes as a `Uint8Array`.
         pub fn build(self) -> Uint8Array {
             let bytes = self.inner.build();
-            let arr   = Uint8Array::new_with_length(bytes.len() as u32);
+            let arr = Uint8Array::new_with_length(bytes.len() as u32);
             arr.copy_from(&bytes);
             arr
         }
@@ -723,9 +885,8 @@ pub mod wasm {
     /// ```
     #[wasm_bindgen]
     pub fn render_template(json: &str) -> Result<Uint8Array, JsValue> {
-        let bytes = crate::template::render_json(json).map_err(|e| {
-            JsValue::from_str(&format!("thermoprint template error: {}", e))
-        })?;
+        let bytes = crate::template::render_json(json)
+            .map_err(|e| JsValue::from_str(&format!("thermoprint template error: {}", e)))?;
         let arr = Uint8Array::new_with_length(bytes.len() as u32);
         arr.copy_from(&bytes);
         Ok(arr)
@@ -767,15 +928,22 @@ pub mod wasm {
         let m = match method.as_deref() {
             Some("threshold") => crate::dither::DitherMethod::Threshold,
             Some("floyd_steinberg") | None => crate::dither::DitherMethod::FloydSteinberg,
-            Some(other) => return Err(JsValue::from_str(
-                &format!("thermoprint: unknown dither method '{}'. Use 'floyd_steinberg' or 'threshold'", other)
-            )),
+            Some(other) => {
+                return Err(JsValue::from_str(&format!(
+                    "thermoprint: unknown dither method '{}'. Use 'floyd_steinberg' or 'threshold'",
+                    other
+                )))
+            }
         };
 
         if rgba.len() != (width * height * 4) as usize {
-            return Err(JsValue::from_str(
-                &format!("thermoprint: RGBA data length {} doesn't match {}×{}×4={}", rgba.len(), width, height, width * height * 4)
-            ));
+            return Err(JsValue::from_str(&format!(
+                "thermoprint: RGBA data length {} doesn't match {}×{}×4={}",
+                rgba.len(),
+                width,
+                height,
+                width * height * 4
+            )));
         }
 
         let bytes = crate::dither::dither_rgba(rgba, width, height, max_width_px, m);

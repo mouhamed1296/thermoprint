@@ -66,18 +66,18 @@ const bytes = new ReceiptBuilder(PrintWidth.Mm80)
 pub mod builder;
 /// Raw ESC/POS command byte sequences.
 pub mod commands;
+/// Image dithering — pure Rust, works in native and WASM.
+pub mod dither;
 /// CP-858 text encoding and layout helpers.
 pub mod encoding;
 /// Error types.
 pub mod error;
-/// Shared domain types (alignment, print width, tax entries).
-pub mod types;
 /// Internationalisation — receipt label translations.
 pub mod i18n;
 /// JSON template engine for receipt generation.
 pub mod template;
-/// Image dithering — pure Rust, works in native and WASM.
-pub mod dither;
+/// Shared domain types (alignment, print width, tax entries).
+pub mod types;
 
 /// Image rasterisation (native builds only).
 #[cfg(feature = "native")]

@@ -1,5 +1,5 @@
-use thermoprint::{ReceiptBuilder, PrintWidth, TaxEntry};
 use rust_decimal::prelude::*;
+use thermoprint::{PrintWidth, ReceiptBuilder, TaxEntry};
 
 // ── Smoke tests: make sure builds don't panic and produce non-empty output ───
 
@@ -8,19 +8,19 @@ fn minimal_80mm_receipt() {
     let bytes = ReceiptBuilder::new(PrintWidth::Mm80)
         .init()
         .align_center()
-        .bold(true).double_size(true)
+        .bold(true)
+        .double_size(true)
         .text_line("MA BOUTIQUE")
-        .bold(false).normal_size()
+        .bold(false)
+        .normal_size()
         .text_line("Tel: +221 77 000 00 00")
         .divider('=')
         .align_left()
         .item("Polo Ralph Lauren", 2, dec!(15_000), None)
-        .item("Jean Levis 501",    1, dec!(25_000), Some(dec!(2_000)))
+        .item("Jean Levis 501", 1, dec!(25_000), Some(dec!(2_000)))
         .divider('-')
         .subtotal_ht(dec!(53_000))
-        .taxes(&[
-            TaxEntry::new("TVA 18%", dec!(9_540), true),
-        ])
+        .taxes(&[TaxEntry::new("TVA 18%", dec!(9_540), true)])
         .total(dec!(62_540))
         .received(dec!(70_000))
         .change(dec!(7_460))
@@ -60,9 +60,7 @@ fn a4_receipt() {
         .item("Facture Service Conseil", 3, dec!(50_000), None)
         .divider('-')
         .subtotal_ht(dec!(150_000))
-        .taxes(&[
-            TaxEntry::new("TVA 18%", dec!(27_000), false),
-        ])
+        .taxes(&[TaxEntry::new("TVA 18%", dec!(27_000), false)])
         .total(dec!(177_000))
         .divider('═')
         .form_feed()
@@ -80,7 +78,10 @@ fn discount_item_contains_remise_bytes() {
 
     // "Remise" should appear in the output
     let output = String::from_utf8_lossy(&bytes);
-    assert!(output.contains("Remise"), "discount label must appear in output");
+    assert!(
+        output.contains("Remise"),
+        "discount label must appear in output"
+    );
 }
 
 #[test]
@@ -109,7 +110,10 @@ fn currency_symbol_override() {
 
     let output = String::from_utf8_lossy(&bytes);
     assert!(output.contains("XOF"), "custom currency symbol must appear");
-    assert!(!output.contains("FCFA"), "default symbol must not appear after override");
+    assert!(
+        !output.contains("FCFA"),
+        "default symbol must not appear after override"
+    );
 }
 
 #[test]
@@ -121,7 +125,7 @@ fn barcode_code128_bytes_present() {
 
     // GS k 73 is the CODE128 command prefix
     let gs = 0x1Du8;
-    let k  = b'k';
+    let k = b'k';
     let ty = 73u8;
     let has_barcode = bytes.windows(3).any(|w| w == [gs, k, ty]);
     assert!(has_barcode, "CODE128 command must be present in output");
@@ -144,7 +148,7 @@ fn qr_code_bytes_present() {
 fn width_cols() {
     assert_eq!(PrintWidth::Mm58.cols(), 32);
     assert_eq!(PrintWidth::Mm80.cols(), 48);
-    assert_eq!(PrintWidth::A4.cols(),   90);
+    assert_eq!(PrintWidth::A4.cols(), 90);
 }
 
 #[test]
@@ -152,9 +156,9 @@ fn multiple_taxes_additional_sum() {
     let bytes = ReceiptBuilder::new(PrintWidth::Mm80)
         .init()
         .taxes(&[
-            TaxEntry::new("TVA 18%",            dec!(4_500), true),
-            TaxEntry::new("Taxe Municipale 2%", dec!(500),   false),
-            TaxEntry::new("Autre taxe 1%",      dec!(250),   false),
+            TaxEntry::new("TVA 18%", dec!(4_500), true),
+            TaxEntry::new("Taxe Municipale 2%", dec!(500), false),
+            TaxEntry::new("Autre taxe 1%", dec!(250), false),
         ])
         .build();
 

@@ -1,83 +1,127 @@
 /// ESC byte (`0x1B`).
 pub const ESC: u8 = 0x1B;
 /// GS byte (`0x1D`).
-pub const GS: u8  = 0x1D;
+pub const GS: u8 = 0x1D;
 /// Line feed byte (`0x0A`).
-pub const LF: u8  = 0x0A;
+pub const LF: u8 = 0x0A;
 /// Form feed byte (`0x0C`) — page eject on A4 / impact printers.
-pub const FF: u8  = 0x0C;
+pub const FF: u8 = 0x0C;
 
 // ── Initialisation ────────────────────────────────────────────────────────────
 
 /// `ESC @` — full printer reset.
-pub fn init() -> &'static [u8] { &[ESC, b'@'] }
+pub fn init() -> &'static [u8] {
+    &[ESC, b'@']
+}
 
 /// Select Code Page 858 (Western European + Euro).
-pub fn code_page_858() -> &'static [u8] { &[ESC, b't', 19] }
+pub fn code_page_858() -> &'static [u8] {
+    &[ESC, b't', 19]
+}
 
 // ── Alignment ─────────────────────────────────────────────────────────────────
 
 /// `ESC a 0` — left alignment.
-pub fn align_left()   -> &'static [u8] { &[ESC, b'a', 0] }
+pub fn align_left() -> &'static [u8] {
+    &[ESC, b'a', 0]
+}
 /// `ESC a 1` — center alignment.
-pub fn align_center() -> &'static [u8] { &[ESC, b'a', 1] }
+pub fn align_center() -> &'static [u8] {
+    &[ESC, b'a', 1]
+}
 /// `ESC a 2` — right alignment.
-pub fn align_right()  -> &'static [u8] { &[ESC, b'a', 2] }
+pub fn align_right() -> &'static [u8] {
+    &[ESC, b'a', 2]
+}
 
 // ── Text style ────────────────────────────────────────────────────────────────
 
 /// `ESC E 1` — bold on.
-pub fn bold_on()  -> &'static [u8] { &[ESC, b'E', 1] }
+pub fn bold_on() -> &'static [u8] {
+    &[ESC, b'E', 1]
+}
 /// `ESC E 0` — bold off.
-pub fn bold_off() -> &'static [u8] { &[ESC, b'E', 0] }
+pub fn bold_off() -> &'static [u8] {
+    &[ESC, b'E', 0]
+}
 
 /// `ESC ! 0x10` — double height only.
-pub fn double_height_on() -> &'static [u8] { &[ESC, b'!', 0x10] }
+pub fn double_height_on() -> &'static [u8] {
+    &[ESC, b'!', 0x10]
+}
 /// `ESC ! 0x20` — double width only.
-pub fn double_width_on()  -> &'static [u8] { &[ESC, b'!', 0x20] }
+pub fn double_width_on() -> &'static [u8] {
+    &[ESC, b'!', 0x20]
+}
 /// `ESC ! 0x30` — double height + double width.
-pub fn double_size_on()   -> &'static [u8] { &[ESC, b'!', 0x30] }
+pub fn double_size_on() -> &'static [u8] {
+    &[ESC, b'!', 0x30]
+}
 /// `ESC ! 0x00` — normal (single) size.
-pub fn normal_size()      -> &'static [u8] { &[ESC, b'!', 0x00] }
+pub fn normal_size() -> &'static [u8] {
+    &[ESC, b'!', 0x00]
+}
 
 /// Underline off.
-pub fn underline_off() -> &'static [u8] { &[ESC, b'-', 0] }
+pub fn underline_off() -> &'static [u8] {
+    &[ESC, b'-', 0]
+}
 /// Single underline.
-pub fn underline_on()  -> &'static [u8] { &[ESC, b'-', 1] }
+pub fn underline_on() -> &'static [u8] {
+    &[ESC, b'-', 1]
+}
 
 // ── Line feed & paper movement ────────────────────────────────────────────────
 
 /// Advance `n` lines.
-pub fn feed_lines(n: u8) -> Vec<u8> { vec![ESC, b'd', n] }
+pub fn feed_lines(n: u8) -> Vec<u8> {
+    vec![ESC, b'd', n]
+}
 
 /// Single line feed.
-pub fn lf() -> &'static [u8] { &[LF] }
+pub fn lf() -> &'static [u8] {
+    &[LF]
+}
 
 /// Form feed — ejects page on A4 / impact printers.
-pub fn form_feed() -> &'static [u8] { &[FF] }
+pub fn form_feed() -> &'static [u8] {
+    &[FF]
+}
 
 // ── Paper cut ─────────────────────────────────────────────────────────────────
 
 /// Full cut with feed.
-pub fn cut_full() -> &'static [u8] { &[GS, b'V', 0] }
+pub fn cut_full() -> &'static [u8] {
+    &[GS, b'V', 0]
+}
 
 /// Partial cut with feed (`GS V 66 0`).
-pub fn cut_partial() -> &'static [u8] { &[GS, b'V', 66, 0] }
+pub fn cut_partial() -> &'static [u8] {
+    &[GS, b'V', 66, 0]
+}
 
 // ── Barcodes ──────────────────────────────────────────────────────────────────
 
 /// Set HRI (Human Readable Interpretation) position.
 /// `pos`: 0 = none, 1 = above, 2 = below, 3 = both.
-pub fn barcode_hri_position(pos: u8) -> Vec<u8> { vec![GS, b'H', pos] }
+pub fn barcode_hri_position(pos: u8) -> Vec<u8> {
+    vec![GS, b'H', pos]
+}
 
 /// Set HRI font: 0 = Font A (default), 1 = Font B.
-pub fn barcode_hri_font(font: u8) -> Vec<u8> { vec![GS, b'f', font] }
+pub fn barcode_hri_font(font: u8) -> Vec<u8> {
+    vec![GS, b'f', font]
+}
 
 /// Set barcode height in dots (default 162).
-pub fn barcode_height(dots: u8) -> Vec<u8> { vec![GS, b'h', dots] }
+pub fn barcode_height(dots: u8) -> Vec<u8> {
+    vec![GS, b'h', dots]
+}
 
 /// Set barcode module width (1–6, default 3).
-pub fn barcode_width(width: u8) -> Vec<u8> { vec![GS, b'w', width] }
+pub fn barcode_width(width: u8) -> Vec<u8> {
+    vec![GS, b'w', width]
+}
 
 /// Print a CODE128 barcode (`GS k 73 len data`).
 ///
@@ -106,10 +150,14 @@ pub fn qr_code(data: &str, size: u8) -> Vec<u8> {
 
     // Store data in QR code symbol storage area
     cmd.extend_from_slice(&[
-        GS, b'(', b'k',
+        GS,
+        b'(',
+        b'k',
         (plen & 0xFF) as u8,
         ((plen >> 8) & 0xFF) as u8,
-        49, 80, 48, // fn 80: store data
+        49,
+        80,
+        48, // fn 80: store data
     ]);
     cmd.extend_from_slice(data.as_bytes());
 
@@ -161,7 +209,7 @@ mod tests {
     fn code128_includes_value() {
         let cmd = barcode_code128("ORD-001");
         assert_eq!(cmd[2], 73); // CODE128 type
-        assert_eq!(cmd[3], 7);  // length
+        assert_eq!(cmd[3], 7); // length
         assert_eq!(&cmd[4..], b"ORD-001");
     }
 
@@ -177,9 +225,9 @@ mod tests {
         let data = vec![0xFFu8; 4]; // 1 line of 32 pixels
         let cmd = raster_image(4, 1, &data);
         assert_eq!(&cmd[..4], &[GS, b'v', b'0', 0]);
-        assert_eq!(cmd[4], 4);  // xL
-        assert_eq!(cmd[5], 0);  // xH
-        assert_eq!(cmd[6], 1);  // yL
-        assert_eq!(cmd[7], 0);  // yH
+        assert_eq!(cmd[4], 4); // xL
+        assert_eq!(cmd[5], 0); // xH
+        assert_eq!(cmd[6], 1); // yL
+        assert_eq!(cmd[7], 0); // yH
     }
 }

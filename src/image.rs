@@ -1,6 +1,6 @@
-use image::{DynamicImage, GenericImageView};
 use crate::commands;
 use crate::error::ThermoprintError;
+use image::{DynamicImage, GenericImageView};
 
 /// Load an image file and convert it to ESC/POS raster bytes.
 ///
@@ -32,7 +32,7 @@ pub fn rasterise(img: &DynamicImage, max_width_px: u32) -> Vec<u8> {
     let gray = img.to_luma8();
 
     // Width must be padded to a multiple of 8 for ESC/POS raster
-    let bytes_per_line = ((width + 7) / 8) as usize;
+    let bytes_per_line = width.div_ceil(8) as usize;
     let mut raster = Vec::with_capacity(bytes_per_line * height as usize);
 
     for y in 0..height {
@@ -41,7 +41,7 @@ pub fn rasterise(img: &DynamicImage, max_width_px: u32) -> Vec<u8> {
             // Pixels darker than mid-grey are printed (bit = 1)
             if gray.get_pixel(x, y)[0] < 128 {
                 let byte_idx = (x / 8) as usize;
-                let bit_idx  = 7 - (x % 8); // MSB first
+                let bit_idx = 7 - (x % 8); // MSB first
                 row[byte_idx] |= 1 << bit_idx;
             }
         }

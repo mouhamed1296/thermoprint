@@ -1,3 +1,4 @@
+use rust_decimal::prelude::*;
 /// Thermoprint native example
 ///
 /// Builds a full 80mm receipt and writes the raw ESC/POS bytes to `receipt.bin`.
@@ -12,8 +13,7 @@
 /// Send to a real printer (Linux/macOS):
 ///   cat receipt.bin > /dev/usb/lp0
 use std::fs;
-use thermoprint::{ReceiptBuilder, PrintWidth, TaxEntry, Language};
-use rust_decimal::prelude::*;
+use thermoprint::{Language, PrintWidth, ReceiptBuilder, TaxEntry};
 
 fn main() {
     let lang = match std::env::args().nth(1).as_deref() {
@@ -22,7 +22,7 @@ fn main() {
         Some("pt") => Language::Pt,
         Some("ar") => Language::Ar,
         Some("wo") => Language::Wo,
-        _          => Language::Fr,
+        _ => Language::Fr,
     };
 
     let bytes = ReceiptBuilder::new(PrintWidth::Mm80)
@@ -32,15 +32,15 @@ fn main() {
         .shop_header("MA BOUTIQUE", "+221 77 000 00 00", "Dakar, Sénégal")
         .divider('=')
         // ── Items ─────────────────────────────────────────────────────────
-        .item("Polo Ralph Lauren",  2, dec!(15_000), None)
-        .item("Jean Levis 501",     1, dec!(25_000), Some(dec!(2_000)))
-        .item("Sneakers Nike Air",  1, dec!(45_000), None)
+        .item("Polo Ralph Lauren", 2, dec!(15_000), None)
+        .item("Jean Levis 501", 1, dec!(25_000), Some(dec!(2_000)))
+        .item("Sneakers Nike Air", 1, dec!(45_000), None)
         .divider('-')
         // ── Totals ────────────────────────────────────────────────────────
         .subtotal_ht(dec!(98_000))
         .taxes(&[
-            TaxEntry::new("TVA 18%",            dec!(17_640), true),
-            TaxEntry::new("Taxe Municipale 2%", dec!(1_960),  false),
+            TaxEntry::new("TVA 18%", dec!(17_640), true),
+            TaxEntry::new("Taxe Municipale 2%", dec!(1_960), false),
         ])
         .total(dec!(99_960))
         .received(dec!(100_000))
