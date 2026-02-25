@@ -10,22 +10,13 @@ on:
       - ".github/workflows/deploy-demo.yml"
   workflow_dispatch: # allow manual trigger
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+env:
+  CARGO_TERM_COLOR: always
 
 jobs:
   deploy:
-    name: Build & Deploy to GitHub Pages
+    name: Build & Deploy to Vercel
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - uses: actions/checkout@v4
@@ -54,13 +45,13 @@ jobs:
       # the relative import `../../pkg/thermoprint.js` in app.js works.
       - name: Assemble site
         run: |
-          mkdir -p _site/examples/web
-          mkdir -p _site/pkg
-          cp examples/web/index.html examples/web/style.css examples/web/app.js _site/examples/web/
-          cp pkg/thermoprint.js pkg/thermoprint_bg.wasm _site/pkg/
-          cp js/printer.js js/export.js _site/pkg/
+          mkdir -p dist/examples/web
+          mkdir -p dist/pkg
+          cp examples/web/index.html examples/web/style.css examples/web/app.js dist/examples/web/
+          cp pkg/thermoprint.js pkg/thermoprint_bg.wasm dist/pkg/
+          cp js/printer.js js/export.js dist/pkg/
           # Root redirect → examples/web/
-          cat > _site/index.html << 'REDIRECT'
+          cat > dist/index.html << 'REDIRECT'
           <!DOCTYPE html>
           <html>
           <head><meta http-equiv="refresh" content="0;url=examples/web/"></head>
@@ -68,16 +59,11 @@ jobs:
           </html>
           REDIRECT
 
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-        with:
-          enablement: true
+      - name: Install Vercel CLI
+        run: npm install -g vercel
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Vercel
+        run: vercel deploy dist --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
