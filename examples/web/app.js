@@ -7,17 +7,23 @@
  * Serve from project root:  make serve-demo
  */
 
-import init, { WasmReceiptBuilder } from '../../pkg/thermoprint.js';
+import init, { WasmReceiptBuilder, render_template, dither_image } from '../../pkg/thermoprint.js';
+import { ThermoPrinter } from '../../pkg/printer.js';
+import { ReceiptExporter } from '../../pkg/export.js';
 
 // ── State ─────────────────────────────────────────────────────────────────────
 
 let wasmReady   = false;
 let lastBytes   = null;
 let lastCode    = '';
+let lastJson    = '';
+let lastTemplate = null;
 let itemCount   = 0;
 let taxCount    = 0;
 let customCount = 0;
 let receiptNo   = Math.floor(Math.random() * 90000) + 10000;
+let logoRasterBytes = null; // Uint8Array from dither_image
+let logoDataUrl = null;     // for preview
 
 const alignState = { 'header-align': 'center', 'footer-align': 'center' };
 
@@ -38,8 +44,15 @@ async function boot() {
     await init();
     wasmReady = true;
     document.getElementById('build-btn').disabled = false;
+    // Enable print button if WebSerial/WebUSB available
+    if (ThermoPrinter.hasWebSerial || ThermoPrinter.hasWebUSB) {
+      document.getElementById('print-btn').title = ThermoPrinter.hasWebSerial ? 'Print via WebSerial' : 'Print via WebUSB';
+    } else {
+      document.getElementById('print-btn').title = 'WebSerial/WebUSB not available in this browser';
+    }
     addItem();
     addTax();
+    setupLogo();
     buildReceipt();
   } catch (e) {
     showError('Failed to load WASM.\n\nRun `make build-wasm` and serve from project root.\n\n' + e.message);
@@ -306,6 +319,14 @@ function buildReceipt() {
     b = b.init();
 
     b = b[alignFn[headerAlign]]();
+
+    // Logo (dithered image)
+    if (logoRasterBytes) {
+      b = b.align_center();
+      b = b.logo_raw(logoRasterBytes);
+      b = b[alignFn[headerAlign]]();
+    }
+
     b = b.bold(true).double_size(true);
     b = b.text_line(shopName);
     b = b.bold(false).normal_size();
@@ -373,6 +394,11 @@ function buildReceipt() {
 
     // ── Build semantic preview HTML ──
     const html = [];
+
+    // Logo preview
+    if (logoDataUrl) {
+      html.push(`<div class="r-line r-center"><img src="${logoDataUrl}" style="max-width:160px;max-height:80px;display:inline-block;filter:grayscale(1) contrast(1.5)" /></div>`);
+    }
 
     // Header
     html.push(pLine(shopName, headerAlign, 'r-big'));
@@ -452,23 +478,34 @@ function buildReceipt() {
     el.style.display = 'block';
     empty.style.display = 'none';
 
-    // Code gen
-    lastCode = generateCode({
+    const cfg = {
       shopName, shopPhone, shopAddress, currency, width, lang,
       headerAlign, footerAlign, items, taxes, customLines,
       subtotal, total, received: recv, orderRef, servedBy,
       optDate, optRecNo, optBarcode, optQr, qrData, optThanks, optCut,
       receiptNo,
-    });
+    };
+
+    // Code gen
+    lastCode = generateCode(cfg);
+
+    // JSON template gen
+    lastTemplate = generateTemplate(cfg);
+    lastJson = JSON.stringify(lastTemplate, null, 2);
 
     updateStats(bytes, items, taxes, total, currency);
     renderHex(bytes);
     renderCode(lastCode);
+    renderJson(lastJson);
 
-    document.getElementById('download-btn').disabled  = false;
-    document.getElementById('copy-hex-btn').disabled   = false;
-    document.getElementById('copy-code-btn').disabled  = false;
-    document.getElementById('stats-bar').style.display = 'flex';
+    document.getElementById('download-btn').disabled    = false;
+    document.getElementById('copy-hex-btn').disabled     = false;
+    document.getElementById('copy-code-btn').disabled    = false;
+    document.getElementById('copy-json-btn').disabled    = false;
+    document.getElementById('export-png-btn').disabled   = false;
+    document.getElementById('export-pdf-btn').disabled   = false;
+    document.getElementById('print-btn').disabled        = !lastBytes;
+    document.getElementById('stats-bar').style.display   = 'flex';
 
   } catch (e) {
     showError(e.message || String(e));
@@ -566,10 +603,84 @@ function generateCode(cfg) {
   return L.join('\n');
 }
 
+// ── Generate JSON Template ──────────────────────────────────────────────────
+
+function generateTemplate(cfg) {
+  const elements = [];
+  elements.push({ type: 'init' });
+
+  elements.push({ type: 'shop_header', name: cfg.shopName, phone: cfg.shopPhone, address: cfg.shopAddress });
+
+  if (cfg.optDate || cfg.optRecNo) {
+    elements.push({ type: 'divider', char: '-' });
+    if (cfg.optDate) {
+      const now = new Date();
+      elements.push({ type: 'text_line', text: now.toLocaleDateString() + '  ' + now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    }
+    if (cfg.optRecNo) elements.push({ type: 'text_line', text: `#${cfg.receiptNo}` });
+  }
+
+  elements.push({ type: 'divider', char: '=' });
+
+  for (const it of cfg.items) {
+    const el = { type: 'item', name: it.name, qty: it.qty, unit_price: String(Math.round(it.price)) };
+    if (it.discount > 0) el.discount = String(Math.round(it.discount));
+    elements.push(el);
+  }
+
+  for (const cl of cfg.customLines) {
+    if (!cl.text) continue;
+    if (cl.align === 'center') elements.push({ type: 'centered', text: cl.text });
+    else if (cl.align === 'right') elements.push({ type: 'right', text: cl.text });
+    else elements.push({ type: 'text_line', text: cl.text });
+  }
+
+  if (cfg.items.length > 0) {
+    elements.push({ type: 'divider', char: '-' });
+    elements.push({ type: 'subtotal', amount: String(Math.round(cfg.subtotal)) });
+  }
+
+  for (const tax of cfg.taxes) {
+    if (tax.amount > 0) {
+      elements.push({ type: 'tax', label: tax.label, amount: String(tax.amount), included: tax.included });
+    }
+  }
+
+  elements.push({ type: 'total', amount: String(Math.round(cfg.total)) });
+
+  if (cfg.received > 0) {
+    elements.push({ type: 'received', amount: String(cfg.received) });
+    const ch = cfg.received - Math.round(cfg.total);
+    if (ch > 0) elements.push({ type: 'change', amount: String(ch) });
+  }
+
+  elements.push({ type: 'divider', char: '=' });
+
+  if (cfg.optBarcode && cfg.orderRef) elements.push({ type: 'barcode_code128', value: cfg.orderRef });
+  if (cfg.optQr && cfg.qrData) elements.push({ type: 'qr_code', data: cfg.qrData, size: 6 });
+  if (cfg.servedBy) elements.push({ type: 'served_by', name: cfg.servedBy });
+  if (cfg.optThanks && cfg.shopName) elements.push({ type: 'thank_you', shop_name: cfg.shopName });
+  if (cfg.optCut) {
+    elements.push({ type: 'feed', lines: 3 });
+    elements.push({ type: 'cut' });
+  }
+
+  return {
+    width: cfg.width,
+    currency: cfg.currency,
+    language: cfg.lang,
+    elements,
+  };
+}
+
 // ── Render code output ───────────────────────────────────────────────────────
 
 function renderCode(code) {
   document.getElementById('code-output').textContent = code;
+}
+
+function renderJson(json) {
+  document.getElementById('json-output').textContent = json;
 }
 
 // ── Stats bar ────────────────────────────────────────────────────────────────
@@ -620,6 +731,129 @@ document.getElementById('copy-code-btn').addEventListener('click', async () => {
   await navigator.clipboard.writeText(lastCode);
   showToast('JS code copied to clipboard');
 });
+
+document.getElementById('copy-json-btn').addEventListener('click', async () => {
+  if (!lastJson) return;
+  await navigator.clipboard.writeText(lastJson);
+  showToast('JSON template copied to clipboard');
+});
+
+// ── Print via WebSerial/WebUSB ──────────────────────────────────────────────
+
+document.getElementById('print-btn').addEventListener('click', async () => {
+  if (!lastBytes) return;
+  const btn = document.getElementById('print-btn');
+  const origText = btn.innerHTML;
+  try {
+    btn.disabled = true;
+    btn.textContent = 'Connecting...';
+    await ThermoPrinter.quickPrint(lastBytes);
+    showToast('Printed successfully!');
+  } catch (e) {
+    if (e.name === 'NotFoundError' || e.message?.includes('cancelled')) {
+      showToast('Printer selection cancelled');
+    } else {
+      showToast('Print failed: ' + (e.message || e));
+      console.error('Print error:', e);
+    }
+  } finally {
+    btn.innerHTML = origText;
+    btn.disabled = false;
+  }
+});
+
+// ── Export PNG / PDF ────────────────────────────────────────────────────────
+
+document.getElementById('export-png-btn').addEventListener('click', () => {
+  if (!lastTemplate) return;
+  try {
+    const exporter = new ReceiptExporter(lastTemplate);
+    exporter.downloadPNG('receipt.png');
+    showToast('PNG downloaded');
+  } catch (e) {
+    showToast('PNG export failed: ' + e.message);
+    console.error(e);
+  }
+});
+
+document.getElementById('export-pdf-btn').addEventListener('click', () => {
+  if (!lastTemplate) return;
+  try {
+    const exporter = new ReceiptExporter(lastTemplate);
+    exporter.downloadPDF('receipt.pdf');
+    showToast('PDF downloaded');
+  } catch (e) {
+    showToast('PDF export failed: ' + e.message);
+    console.error(e);
+  }
+});
+
+// ── Logo upload & dithering ─────────────────────────────────────────────────
+
+function setupLogo() {
+  const fileInput = document.getElementById('logo-file');
+  const uploadBtn = document.getElementById('btn-upload-logo');
+  const removeBtn = document.getElementById('btn-remove-logo');
+  const imgPreview = document.getElementById('logo-img-preview');
+  const canvas = document.getElementById('logo-canvas');
+
+  uploadBtn.addEventListener('click', () => fileInput.click());
+
+  removeBtn.addEventListener('click', () => {
+    logoRasterBytes = null;
+    logoDataUrl = null;
+    fileInput.value = '';
+    imgPreview.style.display = 'none';
+    removeBtn.style.display = 'none';
+    uploadBtn.style.display = 'flex';
+    buildReceipt();
+  });
+
+  fileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        // Draw to canvas
+        const maxW = 384; // 80mm printer width in pixels
+        const scale = img.width > maxW ? maxW / img.width : 1;
+        const w = Math.round(img.width * scale);
+        const h = Math.round(img.height * scale);
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+
+        // Get RGBA data and dither
+        const imageData = ctx.getImageData(0, 0, w, h);
+        try {
+          logoRasterBytes = dither_image(
+            new Uint8Array(imageData.data.buffer),
+            w, h, 384, 'floyd_steinberg'
+          );
+          logoDataUrl = reader.result;
+
+          // Show preview
+          imgPreview.src = logoDataUrl;
+          imgPreview.style.display = 'block';
+          removeBtn.style.display = 'inline-block';
+          uploadBtn.style.display = 'none';
+
+          showToast(`Logo dithered (${w}×${h} → ${logoRasterBytes.length} bytes)`);
+          buildReceipt();
+        } catch (err) {
+          showToast('Dither failed: ' + err.message);
+          console.error(err);
+        }
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
 
 // ── Tabs ─────────────────────────────────────────────────────────────────────
 

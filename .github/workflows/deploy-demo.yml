@@ -58,6 +58,7 @@ jobs:
           mkdir -p _site/pkg
           cp examples/web/index.html examples/web/style.css examples/web/app.js _site/examples/web/
           cp pkg/thermoprint.js pkg/thermoprint_bg.wasm _site/pkg/
+          cp js/printer.js js/export.js _site/pkg/
           # Root redirect → examples/web/
           cat > _site/index.html << 'REDIRECT'
           <!DOCTYPE html>
