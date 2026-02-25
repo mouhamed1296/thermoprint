@@ -75,6 +75,9 @@ jobs:
           --features wasm
           --no-default-features
 
+      - name: Copy JS modules into pkg
+        run: cp js/printer.js js/printer.d.ts js/export.js js/export.d.ts pkg/
+
       - name: Upload WASM artifact
         uses: actions/upload-artifact@v4
         with:

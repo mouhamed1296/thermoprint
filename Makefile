@@ -17,6 +17,7 @@ build-wasm:
 		--out-dir pkg \
 		--features wasm \
 		--no-default-features
+	cp js/printer.js js/printer.d.ts js/export.js js/export.d.ts pkg/
 	@echo "✅ WASM build complete → pkg/"
 
 ## Build WASM targeting Node.js

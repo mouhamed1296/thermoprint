@@ -64,6 +64,9 @@ jobs:
           --features wasm
           --no-default-features
 
+      - name: Copy JS modules into pkg
+        run: cp js/printer.js js/printer.d.ts js/export.js js/export.d.ts pkg/
+
       - name: Set npm package version from git tag
         run: |
           PKG_VERSION="${GITHUB_REF_NAME#v}"

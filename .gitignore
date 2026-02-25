@@ -1,6 +1,7 @@
 /target
 /pkg
 /pkg-node
+/tauri-plugin-thermoprint/target
 Cargo.lock
 .DS_Store
 receipt.bin
