@@ -9,6 +9,45 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-02-25
+
+### Added
+
+- **JSON template engine** (`template` module)
+  - `ReceiptTemplate::from_json(json)` — parse a JSON receipt definition
+  - `render_json(json)` — one-liner: JSON string → ESC/POS bytes
+  - `render_template(json)` WASM function for JavaScript
+  - 30+ supported element types (init, shop_header, item, total, barcode, qr_code, etc.)
+  - Full serde deserialization with sensible defaults
+- **Image dithering** (`dither` module)
+  - `dither_rgba(rgba, w, h, max_px, method)` — pure Rust, works in native + WASM
+  - Floyd-Steinberg error-diffusion and simple threshold methods
+  - Bilinear downscale for oversized images
+  - Alpha-aware grayscale conversion (transparent → white)
+  - `dither_image()` WASM function — accepts canvas `ImageData` directly
+- **ThermoPrinter** (`js/printer.js`)
+  - `ThermoPrinter` class for WebSerial and WebUSB browser printing
+  - `ThermoPrinter.quickPrint(bytes)` — one-liner: connect → print → disconnect
+  - Auto-detects available transport (WebSerial preferred, WebUSB fallback)
+  - Chunked writes to avoid overflowing printer buffers
+  - TypeScript declarations included
+- **ReceiptExporter** (`js/export.js`)
+  - Render receipt templates to PNG (data URL or Blob) or PDF
+  - Uses offscreen canvas — works in web workers
+  - Same JSON template format as the template engine
+  - Visual barcode and QR code rendering
+  - TypeScript declarations included
+- **Tauri plugin** (`tauri-plugin-thermoprint/`)
+  - `tauri_plugin_thermoprint::init()` — register with Tauri v2
+  - `list_ports` command — discover serial printers
+  - `print_serial` command — send raw ESC/POS bytes
+  - `print_template` command — render JSON template + print in one call
+  - Chunked serial writes with flush
+
+### Changed
+
+- `serde_json` added as a core dependency (for template engine)
+
 ## [0.2.0] - 2026-02-25
 
 ### Added

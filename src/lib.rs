@@ -74,6 +74,10 @@ pub mod error;
 pub mod types;
 /// Internationalisation — receipt label translations.
 pub mod i18n;
+/// JSON template engine for receipt generation.
+pub mod template;
+/// Image dithering — pure Rust, works in native and WASM.
+pub mod dither;
 
 /// Image rasterisation (native builds only).
 #[cfg(feature = "native")]
@@ -81,8 +85,10 @@ pub mod image;
 
 // Convenient top-level re-exports
 pub use builder::ReceiptBuilder;
+pub use dither::{dither_rgba, DitherMethod};
 pub use error::ThermoprintError;
 pub use i18n::{Language, ReceiptLabels};
+pub use template::{render_json, ReceiptTemplate};
 pub use types::{Align, PrintWidth, TaxEntry};
 
 // ── WASM public surface ───────────────────────────────────────────────────────

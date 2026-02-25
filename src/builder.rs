@@ -703,4 +703,84 @@ pub mod wasm {
             arr
         }
     }
+
+    /// Render a JSON receipt template to ESC/POS bytes.
+    ///
+    /// Accepts a JSON string describing the receipt layout and returns
+    /// a `Uint8Array` of ESC/POS bytes ready to send to a printer.
+    ///
+    /// ```js
+    /// import init, { render_template } from 'thermoprint';
+    /// await init();
+    /// const bytes = render_template(JSON.stringify({
+    ///   width: "80mm",
+    ///   elements: [
+    ///     { type: "init" },
+    ///     { type: "shop_header", name: "MY SHOP", phone: "+1 555", address: "NYC" },
+    ///     { type: "cut" }
+    ///   ]
+    /// }));
+    /// ```
+    #[wasm_bindgen]
+    pub fn render_template(json: &str) -> Result<Uint8Array, JsValue> {
+        let bytes = crate::template::render_json(json).map_err(|e| {
+            JsValue::from_str(&format!("thermoprint template error: {}", e))
+        })?;
+        let arr = Uint8Array::new_with_length(bytes.len() as u32);
+        arr.copy_from(&bytes);
+        Ok(arr)
+    }
+
+    /// Dither an RGBA image to ESC/POS raster bytes.
+    ///
+    /// Use this to convert a logo or image from a `<canvas>` to printable bytes.
+    ///
+    /// - `rgba`: `Uint8Array` of raw RGBA pixel data (4 bytes per pixel).
+    /// - `width`: image width in pixels.
+    /// - `height`: image height in pixels.
+    /// - `max_width_px`: max printable width (e.g. 384 for 80mm).
+    /// - `method`: `"floyd_steinberg"` or `"threshold"` (default: Floyd-Steinberg).
+    ///
+    /// Returns a `Uint8Array` of ESC/POS raster bytes to pass to `logo_raw()`.
+    ///
+    /// ```js
+    /// // Get RGBA from canvas
+    /// const ctx = canvas.getContext('2d');
+    /// const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    /// const raster = dither_image(imageData.data, canvas.width, canvas.height, 384, "floyd_steinberg");
+    ///
+    /// const receipt = new WasmReceiptBuilder("80mm")
+    ///   .init()
+    ///   .align_center()
+    ///   .logo_raw(raster)
+    ///   .cut()
+    ///   .build();
+    /// ```
+    #[wasm_bindgen]
+    pub fn dither_image(
+        rgba: &[u8],
+        width: u32,
+        height: u32,
+        max_width_px: u32,
+        method: Option<String>,
+    ) -> Result<Uint8Array, JsValue> {
+        let m = match method.as_deref() {
+            Some("threshold") => crate::dither::DitherMethod::Threshold,
+            Some("floyd_steinberg") | None => crate::dither::DitherMethod::FloydSteinberg,
+            Some(other) => return Err(JsValue::from_str(
+                &format!("thermoprint: unknown dither method '{}'. Use 'floyd_steinberg' or 'threshold'", other)
+            )),
+        };
+
+        if rgba.len() != (width * height * 4) as usize {
+            return Err(JsValue::from_str(
+                &format!("thermoprint: RGBA data length {} doesn't match {}×{}×4={}", rgba.len(), width, height, width * height * 4)
+            ));
+        }
+
+        let bytes = crate::dither::dither_rgba(rgba, width, height, max_width_px, m);
+        let arr = Uint8Array::new_with_length(bytes.len() as u32);
+        arr.copy_from(&bytes);
+        Ok(arr)
+    }
 }

@@ -28,6 +28,12 @@ Built by **Mamadou Sarr** — battle-tested on real POS hardware in Dakar, Seneg
 - ✅ Cash drawer kick
 - ✅ WASM/npm — same API in browser (WebUSB / WebSerial) and Node.js
 - ✅ Zero unsafe code
+- ✅ **JSON template engine** — define receipts as JSON, render to bytes
+- ✅ **Image dithering** — Floyd-Steinberg dithering, works in WASM (logos from canvas)
+- ✅ **One-liner browser printing** — `ThermoPrinter` class for WebSerial / WebUSB
+- ✅ **PNG / PDF export** — render receipts to images for email or archiving
+- ✅ **Tauri plugin** — `tauri-plugin-thermoprint` for desktop POS apps
+- ✅ **i18n** — 6 languages (FR, EN, ES, PT, AR, WO)
 
 ---
 
@@ -158,6 +164,140 @@ await port.open({ baudRate: 9600 });
 const writer = port.writable.getWriter();
 await writer.write(bytes);
 writer.releaseLock();
+```
+
+---
+
+## JSON Template Engine
+
+Define receipts as JSON — no code required. Works in Rust, WASM, and the Tauri plugin.
+
+```json
+{
+  "width": "80mm",
+  "currency": "FCFA",
+  "language": "fr",
+  "elements": [
+    { "type": "init" },
+    { "type": "shop_header", "name": "MA BOUTIQUE", "phone": "+221 77 000", "address": "Dakar" },
+    { "type": "divider", "char": "=" },
+    { "type": "item", "name": "Polo shirt", "qty": 2, "unit_price": "15000" },
+    { "type": "divider", "char": "-" },
+    { "type": "total", "amount": "30000" },
+    { "type": "barcode_code128", "value": "ORD-2024-001" },
+    { "type": "feed", "lines": 3 },
+    { "type": "cut" }
+  ]
+}
+```
+
+**Rust:**
+
+```rust
+use thermoprint::render_json;
+let bytes = render_json(json_str).unwrap();
+```
+
+**JavaScript (WASM):**
+
+```js
+import init, { render_template } from 'thermoprint';
+await init();
+const bytes = render_template(JSON.stringify(template));
+```
+
+Supported element types: `init`, `shop_header`, `text_line`, `centered`, `right`, `row`, `divider`, `blank`, `bold`, `double_size`, `double_height`, `normal_size`, `underline`, `align`, `item`, `subtotal`, `tax`, `discount`, `total`, `received`, `change`, `served_by`, `thank_you`, `barcode_code128`, `barcode_ean13`, `qr_code`, `feed`, `cut`, `cut_full`, `form_feed`, `open_cash_drawer`.
+
+---
+
+## One-Liner Browser Printing
+
+`ThermoPrinter` handles WebSerial and WebUSB connections automatically.
+
+```js
+import { ThermoPrinter } from 'thermoprint/printer';
+
+// One-liner: connect → print → disconnect
+await ThermoPrinter.quickPrint(bytes);
+
+// Or with more control
+const printer = new ThermoPrinter({ baudRate: 9600 });
+await printer.connect();   // prompts user to select device
+await printer.print(bytes);
+await printer.disconnect();
+```
+
+Options: `transport` (`'webserial'` or `'webusb'`), `baudRate`, `usbFilters`, `usbEndpoint`, `chunkSize`, `chunkDelay`.
+
+---
+
+## Image Dithering (WASM + Native)
+
+Convert any image to print-ready ESC/POS raster bytes with Floyd-Steinberg dithering. Pure Rust — works everywhere, no `image` crate needed.
+
+**JavaScript (from canvas):**
+
+```js
+import init, { dither_image } from 'thermoprint';
+await init();
+
+const ctx = canvas.getContext('2d');
+const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+const raster = dither_image(imageData.data, canvas.width, canvas.height, 384, "floyd_steinberg");
+
+const receipt = new WasmReceiptBuilder("80mm")
+  .init().align_center().logo_raw(raster).cut().build();
+```
+
+**Rust:**
+
+```rust
+use thermoprint::dither::{dither_rgba, DitherMethod};
+let raster = dither_rgba(&rgba_bytes, width, height, 384, DitherMethod::FloydSteinberg);
+```
+
+---
+
+## PNG / PDF Export
+
+Render receipts to images for email receipts, archiving, or previews. Uses the same JSON template format.
+
+```js
+import { ReceiptExporter } from 'thermoprint/export';
+
+const exporter = new ReceiptExporter(template);
+const dataUrl = exporter.toPNG();              // data:image/png;base64,...
+const blob = await exporter.toPNGBlob();       // Blob
+exporter.downloadPNG('receipt.png');            // triggers download
+exporter.downloadPDF('receipt.pdf');            // triggers PDF download
+const canvas = exporter.getCanvas();           // for embedding
+```
+
+---
+
+## Tauri Plugin
+
+For desktop POS apps built with Tauri v2. See [`tauri-plugin-thermoprint/README.md`](tauri-plugin-thermoprint/README.md).
+
+```rust
+// src-tauri/src/main.rs
+fn main() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_thermoprint::init())
+        .run(tauri::generate_context!())
+        .expect("error running app");
+}
+```
+
+```js
+import { invoke } from '@tauri-apps/api/core';
+
+const ports = await invoke('plugin:thermoprint|list_ports');
+await invoke('plugin:thermoprint|print_template', {
+  port: ports[0].name,
+  baudRate: 9600,
+  template: JSON.stringify(myTemplate),
+});
 ```
 
 ---

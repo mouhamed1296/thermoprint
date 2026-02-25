@@ -1,0 +1,17 @@
+[package]
+name        = "tauri-plugin-thermoprint"
+version     = "0.1.0"
+edition     = "2021"
+authors     = ["Mamadou Sarr"]
+description = "Tauri plugin for thermal receipt printing with thermoprint"
+license     = "MIT"
+repository  = "https://github.com/mouhamed1296/thermoprint"
+keywords    = ["tauri", "plugin", "escpos", "thermal", "printer"]
+
+[dependencies]
+thermoprint   = { path = "..", features = ["native"] }
+tauri         = { version = "2", features = [] }
+serde         = { version = "1", features = ["derive"] }
+serde_json    = "1"
+serialport    = "4"
+log           = "0.4"
