@@ -1,0 +1,10 @@
+{
+  "topics": [
+    "thermal-printer",
+    "escpos",
+    "rust",
+    "wasm",
+    "pos-system",
+    "receipt-builder"
+  ]
+}
